@@ -18,13 +18,13 @@ kinetic = true
 [grid]
 Nx = 96  # radial points = kx modes, spacing 2 pi/Lx = 0.1; production range 64-96 (docs/guidance.rst)
 Ny = 96  # binormal points: 49 ky rows in steps of 0.0476
-Nz = 48  # unused while ntheta is set: the line holds ntheta*(2*nperiod - 1) = 48 points
+Nz = 48  # unused while ntheta is set: a VMEC line holds ntheta points in all
 Lx = 62.8  # radial box length in rho_i; kx spacing 2 pi/Lx = 0.1
 Ly = 62.8  # unused while y0 is set (y0 sets the ky spacing)
 boundary = "fix aspect"  # VMEC flux-tube boundary (fix aspect, docs/inputs.rst)
 y0 = 21.0  # ky spacing 1/y0 = 0.0476, the lowest finite ky
-ntheta = 48  # points per poloidal turn; the z grid has 48 points
-nperiod = 1  # z-grid turns 2*nperiod - 1 = 1; the VMEC line length is npol
+ntheta = 48  # VMEC: total points along the line over [-npol pi, npol pi]; 48 for npol = 1 is 48 per turn
+nperiod = 1  # only supplies npol when npol is unset; the VMEC line length is npol
 
 [time]
 # Optional runtime controls; intervals use normalized time, like t_max.

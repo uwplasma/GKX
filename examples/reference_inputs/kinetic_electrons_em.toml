@@ -46,7 +46,7 @@ kxfac = 1.0  # Factor on the twist-shift kx shift, 2 pi zp kxfac s_hat
 z_min = -3.141592653589793  # Lower end of the field-line coordinate when ntheta is unset
 z_max = 3.141592653589793  # Upper end of the field-line coordinate when ntheta is unset
 y0 = 28.2  # case: Binormal box parameter; the ky spacing is 1/y0. Overrides Ly
-ntheta = 24  # case: Points per poloidal turn; sets Nz = ntheta * zp and the span +-pi zp
+ntheta = 24  # case: Analytic geometry: points per 2 pi segment, so Nz = ntheta * zp over +-pi zp. VMEC: total points along the line over [-npol pi, npol pi], as in GX, stella and GENE
 nperiod = 1  # case: Poloidal turns kept on each side of the centre; gives zp = 2 nperiod - 1
 # zp = (unset)  Number of 2 pi segments along the field line; derived from nperiod when unset
 ky_layout = "half"  # half stores the non-negative ky rows, full the two-sided axis; results agree

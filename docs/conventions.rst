@@ -169,10 +169,14 @@ Parallel coordinate
 -------------------
 
 GKX uses :math:`z \in [-\pi Z_p, \pi Z_p)` with :math:`Z_p = 2n_{\rm period}-1`
-and ``ntheta`` points per :math:`2\pi` (``GridConfig``). GS2's ``theta`` and
-stella's ``zed`` span the same :math:`2n_{\rm period}-1` poloidal turns for the
-same ``nperiod``. The linked boundary condition is ``boundary = "linked"`` in
-GKX and ``boundary_option = "linked"`` in GS2 and stella.
+and, for analytic geometry, ``ntheta`` points per :math:`2\pi` (``GridConfig``),
+so :math:`N_z = n_\theta (2n_{\rm period}-1)`. GS2's ``theta`` and stella's
+``zed`` span the same :math:`2n_{\rm period}-1` poloidal turns for the same
+``nperiod``. For ``model = "vmec"`` the line covers :math:`[-\pi n_{\rm pol},
+\pi n_{\rm pol}]` and ``ntheta`` is the total number of points on it, as
+in GX, stella (``nzed``) and GENE (``nz0``). The linked boundary condition is
+``boundary = "linked"`` in GKX and ``boundary_option = "linked"`` in GS2 and
+stella.
 
 The ballooning angle is :math:`\theta_0 = k_x/(\hat s k_y)` in GKX (from the
 :math:`k_x(\theta)` above), GS2 (``kt_grids_box.f90``) and stella

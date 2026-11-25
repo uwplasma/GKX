@@ -322,6 +322,14 @@ For ``model = "vmec"`` the field-line length is ``geometry.npol``. ``grid.nperio
 only supplies ``npol = 2 * nperiod - 1`` when ``npol`` is unset; a deck that sets
 both with different values is rejected, because the grid is rebuilt from the
 sampled geometry and ``nperiod`` would be ignored.
+For VMEC, ``grid.ntheta`` is the total number of points along the line over
+``[-npol pi, npol pi]``, as in GX (``ntheta`` with ``npol``), stella (``nzed``) and
+GENE (``nz0`` with ``n_pol``); it is not a count per turn. The points per turn
+are ``ntheta / npol``. Analytic geometry counts ``ntheta`` per ``2 pi`` segment
+instead, so ``Nz = ntheta (2 nperiod - 1)``. Resolve at least 16 points per
+field period crossed in one poloidal turn and at least 48 per turn, that is
+``ntheta >= 48 npol``; growth rates on four- and five-period stellarators did
+not converge below that.
 When ``geometry_file`` is set for ``model = "vmec"``, GKX regenerates
 that target instead of reusing a stale file from an older VMEC conversion.
 For VMEC ``fix aspect`` runs, GKX follows the helper default contract and
@@ -512,7 +520,7 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``z_min``","float","``-3.141592653589793``","Lower end of the field-line coordinate when ``ntheta`` is unset."
    "``z_max``","float","``3.141592653589793``","Upper end of the field-line coordinate when ``ntheta`` is unset."
    "``y0``","float","unset","Binormal box parameter; the ky spacing is ``1/y0``. Overrides ``Ly``."
-   "``ntheta``","int","unset","Points per poloidal turn; sets ``Nz = ntheta * zp`` and the span ``+-pi zp``."
+   "``ntheta``","int","unset","Analytic geometry: points per ``2 pi`` segment, so ``Nz = ntheta * zp`` over ``+-pi zp``. VMEC: total points along the line over ``[-npol pi, npol pi]``, as in GX, stella and GENE."
    "``nperiod``","int","unset","Poloidal turns kept on each side of the centre; gives ``zp = 2 nperiod - 1``."
    "``zp``","int","unset","Number of ``2 pi`` segments along the field line; derived from ``nperiod`` when unset."
    "``ky_layout``","str","``""half""``","``half`` stores the non-negative ky rows, ``full`` the two-sided axis; results agree."
