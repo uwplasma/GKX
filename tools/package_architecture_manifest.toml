@@ -258,7 +258,9 @@ recursive = true
 # 70091 -> 70386: merged with main (#505).
 # 70386 -> 70391: IMEX refusal retried smaller; the stepper that ran is reported.
 # 70391 -> 70499: [physics] exb_shear route.
-baseline = 70499
+# 70499 -> 70502: the --estimate floor counts a VMEC line by npol.
+# 70502 -> 70510: the run header counts Nz from ntheta when it is set.
+baseline = 70510
 target = 45000
 
 [[line_budget_policy.counts]]

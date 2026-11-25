@@ -258,7 +258,9 @@ def estimate_resolution(
     geom = build_runtime_geometry(cfg)
 
     grid = cfg.grid
-    zp = float(grid.zp if grid.zp is not None else 2 * (grid.nperiod or 1) - 1)
+    # A VMEC line is npol turns long (nperiod only supplies npol when it is unset).
+    npol = cfg.geometry.npol
+    zp = float(npol if npol is not None else 2 * (grid.nperiod or 1) - 1)
     y0 = float(grid.y0) if grid.y0 is not None else grid.Ly / (2.0 * np.pi)
     est = resolution_from_features(
         geometry_features(geom, zp=zp),

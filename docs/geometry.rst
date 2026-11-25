@@ -67,9 +67,10 @@ For direct comparison with published Cyclone base case benchmarks,
 
 - ``y0`` sets the minimum binormal wave number via :math:`k_y \rho = 1/y_0`.
   Internally this maps to ``Ly = 2\pi y0`` so that the FFT grid spacing matches.
-- ``ntheta`` and ``nperiod`` (or ``zp``) control the parallel grid. We set
-  :math:`Z_p = 2\,nperiod-1` and choose ``Nz = ntheta * Zp``, which spans
-  :math:`[-\pi Z_p, \pi Z_p)`.
+- ``ntheta`` and ``nperiod`` (or ``zp``) control the parallel grid. For analytic
+  geometry we set :math:`Z_p = 2\,nperiod-1` and choose ``Nz = ntheta * Zp``,
+  which spans :math:`[-\pi Z_p, \pi Z_p)`. For ``model = "vmec"``, ``ntheta`` is
+  the total number of points over :math:`[-\pi n_{pol}, \pi n_{pol}]`.
 
 Curvature and grad-B drift
 --------------------------

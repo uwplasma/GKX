@@ -16,11 +16,11 @@ nu = 0.01
 [grid]
 Nx = 96  # radial points = kx modes; production range 64-96 (docs/guidance.rst)
 Ny = 96  # binormal points: 49 ky rows in steps of 0.0714
-Nz = 48  # unused while ntheta is set: the line holds ntheta*(2*nperiod - 1) = 48 points
+Nz = 48  # unused while ntheta is set: a VMEC line holds ntheta points in all
 boundary = "fix aspect"  # VMEC flux-tube boundary (fix aspect, docs/inputs.rst)
 y0 = 14.0  # dky*rho = 0.071, the published W7-X spacing; scan-calibrated
-ntheta = 48  # points per poloidal turn; the z grid has 48 points
-nperiod = 1  # z-grid turns 2*nperiod - 1 = 1; the VMEC line length is npol
+ntheta = 48  # VMEC: total points along the line over [-npol pi, npol pi]; 48 for npol = 1 is 48 per turn
+nperiod = 1  # only supplies npol when npol is unset; the VMEC line length is npol
 
 [time]
 # No dt, method or damp_ends_rate: the CFL controller picks the stepper (auto)

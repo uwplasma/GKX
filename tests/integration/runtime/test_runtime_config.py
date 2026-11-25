@@ -1137,6 +1137,30 @@ def test_estimate_resolution_from_an_analytic_flux_tube(monkeypatch) -> None:
     assert all(f"{key:>6} =" in table for key in ("nx", "nz", "nm", "dt", "t_max"))
 
 
+def test_estimate_floor_counts_npol_turns_of_a_vmec_line(monkeypatch, tmp_path) -> None:
+    from gkx.config import CycloneBaseCase
+    from gkx.geometry import SAlphaGeometry
+    from gkx.geometry.core import ensure_flux_tube_geometry_data
+
+    geom = ensure_flux_tube_geometry_data(
+        SAlphaGeometry.from_config(CycloneBaseCase().geometry),
+        np.linspace(-np.pi, np.pi, 32, endpoint=False),
+    )
+    monkeypatch.setattr(runtime_wout, "build_runtime_geometry", lambda cfg: geom)
+    text = runtime_wout.default_wout_deck_path().read_text(encoding="utf-8")
+    deck = tmp_path / "npol5.toml"
+    deck.write_text(
+        text.replace("npol = 1.0", "npol = 5.0").replace("nperiod = 1", ""),
+        encoding="utf-8",
+    )
+    est = runtime_wout.estimate_resolution(
+        "wout_case.nc", deck_path=deck, target_error="cautious"
+    )
+    assert (
+        est["features"].zp == 5.0 and est["nz"] == 80
+    )  # 16 points per turn, not per deck nperiod
+
+
 def test_wout_flag_parsing_and_output_prefix_rules(tmp_path, monkeypatch) -> None:
     args = ["--vmex=a.nc", "run", "--vmec", "b.nc"]
     assert runtime_wout.extract_wout_flag_value(args) == "b.nc"
