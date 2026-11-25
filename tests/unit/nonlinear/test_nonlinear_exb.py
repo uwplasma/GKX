@@ -1314,7 +1314,7 @@ def test_exb_shear_deck_key_and_zonal_modes_unsheared():
         species=(RuntimeSpeciesConfig(name="ion"),),
         physics=RuntimePhysicsConfig(linear=True, nonlinear=False, exb_shear=0.1),
     )
-    with pytest.raises(ValueError, match="exb_shear needs physics.nonlinear"):
+    with pytest.raises(ValueError, match="needs physics.nonlinear"):
         case.validate()
     # The ky = 0 row carries no shear: a zonal mode stays on its radial mode.
     grid = build_spectral_grid(GridConfig(Nx=16, Ny=8, Nz=4, Lx=40.0, Ly=20.0))

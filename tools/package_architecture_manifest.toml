@@ -259,8 +259,8 @@ recursive = true
 # 70091 -> 70386: merged with main (#505).
 # 70386 -> 70391: IMEX refusal retried smaller; the stepper that ran is reported.
 # 70391 -> 70499: [physics] exb_shear route.
-# 70499 -> 70565: [physics] zonal_flow.
-baseline = 70565
+# 70499 -> 70561: [physics] zonal_flow.
+baseline = 70561
 target = 45000
 
 [[line_budget_policy.counts]]

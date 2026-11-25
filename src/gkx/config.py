@@ -1071,13 +1071,9 @@ class RuntimeConfig:
             errors.append("a case needs at least one kinetic species")
         if bool(self.physics.linear) and bool(self.physics.nonlinear):
             errors.append("physics.linear and physics.nonlinear cannot both be true")
-        if self.physics.exb_shear != 0.0 and not self.physics.nonlinear:
-            errors.append(
-                "physics.exb_shear needs physics.nonlinear = true; set "
-                "terms.nonlinear = 0 for the linear time-dependent (Floquet) run"
-            )
-        if len(self.physics.zonal_flow) and not self.physics.nonlinear:
-            errors.append("physics.zonal_flow needs physics.nonlinear = true")
+        flow = self.physics.exb_shear != 0.0 or len(self.physics.zonal_flow)
+        if flow and not self.physics.nonlinear:
+            errors.append("exb_shear or zonal_flow needs physics.nonlinear = true")
         laguerre_sink_declared = any(
             float(getattr(self.collisions, name)) != 0.0
             for name in ("nu_hyper_l", "nu_hyper_lm")
