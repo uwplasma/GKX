@@ -22,8 +22,8 @@ import numpy as np
 class SaturationStopConfig:
     """Thresholds of the saturation detector (times in a/v_t)."""
 
-    t_min: float = 800.0  # no "saturated" verdict before this run time (<= 0.95 t_cap)
-    rel_sem: float = 0.10  # batch-means SEM over the mean
+    t_min: float = 300.0  # no "saturated" verdict before this run time (<= 0.95 t_cap)
+    rel_sem: float = 0.05  # batch-means SEM over the mean
     drift_rel: float = 0.10  # tolerated change of the mean across the window
     drift_z: float = 2.0  # significance of the OLS trend of the block means
     min_span: float = 250.0  # shortest retained window (<= t_cap / 4)

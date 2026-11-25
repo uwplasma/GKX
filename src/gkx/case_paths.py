@@ -39,7 +39,11 @@ def field_line_errors(case: Any) -> list[str]:
     """Reject a VMEC deck whose ``nperiod`` disagrees with ``geometry.npol``."""
 
     npol, nperiod = case.geometry.npol, case.grid.nperiod
-    if case.geometry.model != "vmec" or npol is None or nperiod is None:
+    if (
+        case.geometry.model not in {"vmec", "desc", "gvec"}
+        or npol is None
+        or nperiod is None
+    ):
         return []
     if 2 * nperiod - 1 == npol:
         return []
@@ -53,7 +57,7 @@ def warn_short_field_line(case: Any) -> None:
     """Warn below npol = 3 (VMEC) or nperiod = 2 (analytic geometry)."""
 
     model, npol, nperiod = case.geometry.model, case.geometry.npol, case.grid.nperiod
-    if model == "vmec":
+    if model in {"vmec", "desc", "gvec"}:
         if npol is None and nperiod is not None:
             npol = 2 * nperiod - 1
         detail = None if npol is None or npol >= 3 else f"geometry.npol = {npol:g}"

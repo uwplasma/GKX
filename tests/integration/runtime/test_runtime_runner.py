@@ -2950,10 +2950,13 @@ def test_adaptive_chunk_time_helper_rejects_empty_or_stalled_chunks() -> None:
     with pytest.raises(RuntimeError, match="chunk 1 produced no time samples"):
         _next_elapsed_time(_diag([]), previous_elapsed=0.0, label="test", chunk_index=1)
 
-    with pytest.raises(RuntimeError, match="made no time-step progress"):
+    with pytest.raises(RuntimeError, match="chunk 1 moved time backwards"):
         _next_elapsed_time(
-            _diag([1.0]), previous_elapsed=1.0, label="test", chunk_index=1
+            _diag([0.5]), previous_elapsed=1.0, label="test", chunk_index=1
         )
+    assert _next_elapsed_time(
+        _diag([1.0]), previous_elapsed=1.0, label="test", chunk_index=1
+    ) == pytest.approx(1.0)
 
 
 def test_run_adaptive_runtime_chunk_loop_keeps_exact_terminal_sample_with_stride() -> (
@@ -2988,6 +2991,19 @@ def test_run_adaptive_runtime_chunk_loop_rejects_horizon_overshoot() -> None:
             chunk_steps=8,
             label="test",
         )
+
+
+def test_run_adaptive_runtime_chunk_loop_retries_a_rejected_only_chunk() -> None:
+    # rk4-pi keeps the state on a rejected step: a one-step chunk ends where it began.
+    chunks = iter([_chunk([0.0], 1.0), _chunk([1.0], 2.0)])
+    result = run_adaptive_runtime_chunk_loop(
+        integrate_chunk=lambda _show_progress, _remaining_time: next(chunks),
+        t_max=1.0,
+        chunk_steps=1,
+        label="test",
+    )
+    np.testing.assert_allclose(np.asarray(result.diagnostics.t), [1.0])
+    np.testing.assert_allclose(np.asarray(result.state), [2.0])
 
 
 def test_run_adaptive_runtime_chunk_loop_rejects_stalled_time_progress() -> None:
@@ -3081,11 +3097,15 @@ def _stop_policy_inputs(*, steps: int, diagnostics_on: bool = True):
 
 def test_saturation_stop_condition_defaults_on_for_diagnosed_nonlinear_runs() -> None:
     cfg, ctx, policy = _stop_policy_inputs(steps=4000)
+    # Use a long horizon so short-run clipping cannot lower the saturation floor.
+    cfg = replace(cfg, time=replace(cfg.time, t_max=1000.0))
 
     assert cfg.time.run_to == "saturation"
     stop = _saturation_stop_condition(cfg, ctx, policy)
     assert stop is not None
-    time = np.arange(0.0, 100.0, 0.5)
+    # The floor follows the default horizon: min(800, 0.95 * t_max) = 95 at t_max = 100
+    # (make_saturation_check), so a trace that ends before it is too short.
+    time = np.arange(0.0, 0.9 * cfg.time.t_max, 0.5)
     decision = stop(time, np.ones_like(time), False)
     assert decision["status"] == "too_short" and decision["stop"] is False
     # At the cap the verdict is reported with its reason, and the run ends.
@@ -3689,3 +3709,98 @@ def test_runtime_imex_chunks_share_one_scan_and_end_on_a_short_final_chunk() -> 
     )
     assert short.t[-1] == pytest.approx(2.0)
     assert np.isfinite(short.state).all()
+
+
+@pytest.mark.parametrize("floor", [0.03, 0.0])
+def test_refused_imex_retries_smaller_then_falls_back_and_says_so(
+    monkeypatch, floor
+) -> None:
+    # A factor refused at the deck's first step (float32, large dt) is retried at
+    # dt/4, dt/16 and only then replaced by rk4-pi, with a warning and the stepper
+    # that ran in the summary. 0.1 -> 0.025 passes the floor; 0.0 refuses all.
+    from gkx.workflows import nonlinear as workflow
+
+    cfg, _ = load_runtime_from_toml(
+        REPO_ROOT / "examples/05_kinetic_electrons/case.toml"
+    )
+    cfg = uniform_moments(cfg)
+    cfg = replace(cfg, grid=replace(cfg.grid, Nx=4, Ny=4, Nz=8))
+    time = replace(cfg.time, t_max=0.1, dt_max=0.1, damp_ends_rate=0.1, run_to="t_max")
+    original, seen = workflow._run_diagnostics, []
+
+    def refuse(cfg, ctx, policy, **kw):
+        seen.append((kw["method"], ctx.dt))
+        if kw["method"] == "imex-ark3" and ctx.dt > floor:
+            raise ValueError("structured implicit factor residual 1e+00 > 5e-02")
+        return original(cfg, ctx, policy, **kw)
+
+    monkeypatch.setattr(workflow, "_run_diagnostics", refuse)
+    request = replace(cfg, time=replace(time, method="imex-ark3"))
+    if floor:
+        result = run_runtime_nonlinear(request, Nl=2, Nm=4)
+    else:
+        with pytest.warns(RuntimeWarning, match="using rk4-pi"):
+            result = run_runtime_nonlinear(request, Nl=2, Nm=4)
+    steppers = [m for m, _ in seen]
+    assert steppers[0] == "imex-ark3"
+    assert result.summary()["integrator"] == ("imex-ark3" if floor else "rk4-pi")
+    assert steppers.count("imex-ark3") == (2 if floor else 3)
+
+
+def _collision_interval_cfg() -> RuntimeConfig:
+    base = _nonlinear_ion_cfg()
+    return replace(
+        base,
+        time=replace(
+            base.time,
+            fixed_dt=True,
+            run_to="t_max",
+            collision_interval=3,
+            collision_split=True,
+        ),
+        terms=replace(base.terms, hypercollisions=1.0),
+    )
+
+
+@pytest.mark.parametrize(
+    "time_options,steps,error",
+    [
+        ({"fixed_dt": False}, 6, "single fixed-step diagnostic scan"),
+        ({"chunk_steps": 2}, 6, "single fixed-step diagnostic scan"),
+        ({"diagnostics_interval": 0.01}, 6, "single fixed-step diagnostic scan"),
+        ({"run_to": "saturation"}, 6, "single fixed-step diagnostic scan"),
+        ({"method": "imex-ark3"}, 6, "fixed-step explicit scan"),
+        ({}, 4, "must divide the number of steps"),
+        ({"collision_interval": 0}, 6, "positive integer"),
+        ({"collision_interval": 2.5}, 6, "positive integer"),
+        ({"collision_split": False}, 6, "active collision split"),
+    ],
+)
+def test_collision_interval_rejects_unsupported_discrete_maps(
+    time_options, steps, error
+) -> None:
+    cfg = _collision_interval_cfg()
+    cfg = replace(cfg, time=replace(cfg.time, **time_options))
+    with pytest.raises(ValueError, match=error):
+        run_runtime_nonlinear(cfg, steps=steps, Nl=2, Nm=2)
+
+
+def test_collision_interval_fixed_scan_rejects_horizon_override() -> None:
+    cfg = _collision_interval_cfg()
+    kwargs = dict(steps=6, Nl=2, Nm=2, diagnostics=True, resolved_diagnostics=False)
+    prepared = prepare(cfg, **kwargs)
+    t, _, state, _ = prepared.run()
+    direct = run_runtime_nonlinear(cfg, return_state=True, **kwargs)
+    np.testing.assert_allclose(t, np.arange(1, 7) * cfg.time.dt)
+    np.testing.assert_allclose(state, direct.state)
+    with pytest.raises(ValueError, match="does not support a time horizon"):
+        prepared.run(time_horizon=0.025)
+
+
+def test_collision_interval_rejects_checkpointing(tmp_path) -> None:
+    cfg = _collision_interval_cfg()
+    cfg = replace(cfg, time=replace(cfg.time, nstep_restart=2))
+    with pytest.raises(ValueError, match="does not support checkpoint/restart"):
+        run_runtime_nonlinear_with_artifacts(
+            cfg, ky_target=0.2, Nl=2, Nm=2, steps=6, out=tmp_path / "test.out.nc"
+        )

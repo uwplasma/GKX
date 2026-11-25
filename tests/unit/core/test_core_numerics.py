@@ -592,6 +592,93 @@ def test_format_duration_clamps_and_rolls_over() -> None:
     assert _format_duration(3661.0) == "1:01:01"
 
 
+def test_progress_reporter_throttles_reports_and_plots(tmp_path) -> None:
+    from types import SimpleNamespace
+
+    import gkx.workflows.runtime.chunks as chunks
+    from gkx.workflows.runtime.chunks import ProgressReporter
+
+    now, lines = [100.0], []
+    rep = ProgressReporter(lines.append, interval=2.0, clock=lambda: now[0])
+    rep("building runtime geometry")
+    saturated = dict(status="saturated", saturated=True, mean=7.1, sem=0.4)
+    # One chunk every 0.5 s of wall time: only one line per 2 s, the first at once.
+    for k in range(9):
+        now[0] = 100.0 + 0.5 * k
+        rep.update(
+            10.0 * (k + 1),
+            100.0,
+            np.array([7.0, 0.5]),
+            dict(saturated, saturated=k > 6),
+        )
+    assert lines[0] == "building runtime geometry"
+    assert len(lines) == 4
+    assert (
+        "t=10/100" in lines[1]
+        and "eta --:--" in lines[1]
+        and "transient" not in lines[1]
+    )
+    assert (
+        "00:02  t=50/100   50%  eta 00:02  Q=7, 0.5  saturating: Q=7.1+-0.4" in lines[2]
+    )
+    assert "saturated: Q=7.1+-0.4" in lines[3]
+    assert chunks._flux_status(None) == "transient"
+
+    t = np.linspace(0.0, 100.0, 201)
+    q = 7.0 + 0.3 * np.sin(t)
+    diag = SimpleNamespace(
+        t=t,
+        heat_flux_t=q,
+        particle_flux_t=q,
+        heat_flux_species_t=np.stack([q, 0.1 * q], axis=1),
+        particle_flux_species_t=None,
+        dt_mean=0.5,
+        resolved=None,
+    )
+    result = SimpleNamespace(
+        t=t,
+        diagnostics=diag,
+        saturation=dict(saturated, window_tmin=40.0, window_tmax=100.0),
+    )
+    rep.finish(result, plot=tmp_path / "run")
+    assert "t=100, 200 steps, Q=7.1+-0.4 (saturated)" in lines[-2]
+    assert (tmp_path / "run.flux_time.png").stat().st_size > 0
+
+
+def test_progress_reporter_edge_cases(tmp_path, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from gkx.workflows.runtime.chunks import ProgressReporter, _flux_status
+
+    lines = []
+    rep = ProgressReporter(lines.append, interval=2.0, clock=lambda: 5.0)
+    rep.update(0.0, 0.0, np.array([1.0]))  # zero-length run: silent, no division
+    assert lines == []
+    rep.update(3.0, 3.0, np.array([np.nan]), dict(mean=np.nan, sem=None))  # NaN flux
+    assert "100%" in lines[0] and "Q=nan" in lines[0] and "transient" in lines[0]
+    rep.update(1.0, 3.0, np.array([1.0]))  # throttled after a line, not the last
+    assert len(lines) == 1
+    assert _flux_status(dict(mean=1.0, sem=0.1, status="growing")) == "transient"
+
+    empty = SimpleNamespace(t=np.zeros(0), diagnostics=None, saturation=None)
+    rep.finish(empty)  # no samples at all
+    assert lines[-1] == "done in 00:00: t=0, 0 steps, no saturation estimate"
+    nan = SimpleNamespace(
+        t=np.array([2.0]),
+        diagnostics=SimpleNamespace(dt_mean=np.nan),
+        saturation=dict(mean=np.nan, sem=np.nan, status="quiescent"),
+    )
+    rep.finish(nan)
+    assert lines[-1].endswith("t=2, 0 steps, no saturation estimate")
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("no display")
+
+    monkeypatch.setattr("gkx.artifacts.run_figures.plot_nonlinear_result", boom)
+    rep.finish(nan, plot=tmp_path / "x")  # plotting failure is contained
+    assert lines[-1] == "could not write the result plot: no display"
+
+
 def test_emit_progress_handles_time_variants_and_metric_labels(monkeypatch) -> None:
     ticks = iter([10.0, 12.0])
     monkeypatch.setattr("gkx.callbacks.time.perf_counter", lambda: next(ticks))

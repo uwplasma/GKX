@@ -2036,7 +2036,12 @@ _RUN_TO_REQUIRED = {
 
 # Decks cleared to run under the default, with the measurement that cleared
 # them: the first-chunk stop decision, and the gate that refused it.
-_RUN_TO_DEFAULT_CLEARED: dict[str, str] = {}
+_RUN_TO_DEFAULT_CLEARED: dict[str, str] = {
+    # QA wout, 96x96x48, (6, 12), A4000 float32, sampled every a/v_t: too_short
+    # until 300, then intermittent; saturated at 481 with Q = 5.36 +- 0.16
+    # against 5.38 over 56..600 (docs/guidance.rst, Turbulence defaults).
+    "examples/common_input.toml": "first chunk refused as too_short and saturated at t = 481",
+}
 
 # Decks that reach the nonlinear runtime and have NOT been measured yet. This
 # is debt, not clearance: the audit that produced the tables above was stopped
@@ -2047,7 +2052,6 @@ _RUN_TO_DEFAULT_CLEARED: dict[str, str] = {}
 # not claiming measurements nobody took. Empty this by moving each entry into
 # _RUN_TO_DEFAULT_CLEARED with its first-chunk stop decision.
 _RUN_TO_AUDIT_PENDING = {
-    "examples/common_input.toml",
     "benchmarks/cases/circular_vmec_nonlinear.toml",
     "examples/03_nonlinear_tokamak/case_full.toml",
     "benchmarks/cases/cyclone_nonlinear_miller.toml",
