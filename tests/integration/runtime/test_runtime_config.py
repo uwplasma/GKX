@@ -309,6 +309,34 @@ def test_maintained_runtime_decks_declare_schema_v1() -> None:
         assert load_toml(path).get("schema_version") == 1, path
 
 
+@pytest.mark.parametrize("key", ["q", "epsilon"])
+def test_runtime_toml_rejects_non_finite_geometry_at_load(
+    tmp_path: Path, key: str
+) -> None:
+    """A NaN geometry value fails at load, naming the key, not later in a solve."""
+
+    path = tmp_path / "case.toml"
+    path.write_text(f"schema_version = 1\n[geometry]\n{key} = nan\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=rf"geometry\.{key} must be finite"):
+        load_runtime_from_toml(path)
+
+
+# The GX-format HSX reference deck is not a GKX runtime deck and does not load.
+_GKX_DECKS = [
+    path
+    for path in sorted((REPO_ROOT / "examples").rglob("*.toml"))
+    + sorted((REPO_ROOT / "benchmarks" / "cases").glob("*.toml"))
+    if path.name != "reference_hsx_nonlinear_adiabatic_electrons.toml"
+]
+
+
+@pytest.mark.parametrize(
+    "path", _GKX_DECKS, ids=[str(p.relative_to(REPO_ROOT)) for p in _GKX_DECKS]
+)
+def test_shipped_decks_pass_geometry_checks(path: Path) -> None:
+    load_runtime_from_toml(path)
+
+
 def test_load_runtime_from_toml_rejects_single_species_table(tmp_path: Path) -> None:
     path = tmp_path / "runtime_bad_species.toml"
     path.write_text(
