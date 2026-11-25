@@ -4640,3 +4640,89 @@ def test_chunk_runaway_ignores_small_seeds_and_zero_start():
     assert _chunk_runaway(np.asarray([1.0, 1e5]))
     assert _chunk_runaway(np.asarray([1.0, np.nan]))
     assert _chunk_runaway(np.asarray([0.0, np.inf]))
+
+
+# ``[time] compact_modes`` carries only the kept 2/3 (ky, kx) block inside the
+# compiled explicit step and zero-pads it for the bracket transforms. Same
+# operators on the same modes, so the two code paths agree to round-off; the
+# tests below are identities between the two paths, not physics references.
+def _compact_modes_deck(method: str = "rk4-pi", **time):
+    """The G1 Cyclone deck at 12 x 12 x 8: Miller, linked with s_hat 0.8 (chains
+    of up to 7 kx links on the 4 x 7 kept block), hyperdiffusion, hypercollisions,
+    end damping and Lenard-Bernstein collisions at nu_ii = 0.01, amplitude 1 so
+    the bracket is not negligible."""
+
+    cfg = load(REPO_ROOT / "benchmarks/cases/cyclone_nonlinear_miller.toml")
+    return replace(
+        cfg,
+        species=(replace(cfg.species[0], nu=0.01),),
+        grid=replace(cfg.grid, Nx=12, Ny=12, Nz=8, ntheta=8),
+        init=replace(cfg.init, init_amp=1.0),
+        time=replace(
+            cfg.time,
+            t_max=3.0,
+            run_to="t_max",
+            method=method,
+            collision_operator="lenard_bernstein",
+            chunk_steps=16,
+            sample_stride=1,
+            diagnostics_stride=1,
+            **time,
+        ),
+    )
+
+
+@pytest.mark.parametrize("method", ["rk4-pi", "rk3"])
+def test_compact_modes_step_is_identical_to_the_full_grid_step(method, monkeypatch):
+    """Identity between two code paths, flag on and off, over about 40 steps."""
+    from gkx.runtime import run_runtime_nonlinear
+    from gkx.solvers.nonlinear import diagnostics as step_module
+
+    built = []
+    compact_cache = step_module.compact_cache
+
+    def counting(cache):
+        built.append(compact_cache(cache))
+        return built[-1]
+
+    monkeypatch.setattr(step_module, "compact_cache", counting)
+
+    def run(compact):
+        cfg = _compact_modes_deck(method, compact_modes=compact)
+        options = dict(Nl=2, Nm=4, return_state=True, resolved_diagnostics=False)
+        return run_runtime_nonlinear(cfg, **options)
+
+    full = run(False)
+    assert not built  # the flag off never builds the compact cache
+    compact = run(True)
+    # The flag reached the step: it ran on the 4 x 7 kept block of the 7 x 12 grid.
+    assert built and (built[-1].ky.size, built[-1].kx.size) == (4, 7)
+    d_full, d_compact = full.diagnostics, compact.diagnostics
+    assert np.asarray(d_full.t).size > 30
+    assert compact.state.shape == full.state.shape
+    # Double-precision round-off from a different operation order, grown over the
+    # steps; single precision gets the float32 equivalent.
+    tol = 1e-12 if full.state.dtype == np.complex128 else 2e-5
+    scale = np.max(np.abs(full.state))
+    assert np.max(np.abs(compact.state - full.state)) <= tol * scale
+    np.testing.assert_allclose(d_compact.t, d_full.t, rtol=tol, atol=0.0)
+    q_full = np.asarray(d_full.heat_flux_t)
+    q_scale = np.max(np.abs(q_full))
+    assert q_scale > 0.0
+    np.testing.assert_allclose(d_compact.heat_flux_t, q_full, atol=tol * q_scale)
+
+
+@pytest.mark.parametrize(
+    ("deck", "named"),
+    [("kinetic_electrons", "kinetic electrons"), ("lawson", "lawson-rk4-pi")],
+)
+def test_compact_modes_refuses_what_it_does_not_cover(deck, named):
+    from gkx.runtime import run_runtime_nonlinear
+
+    if deck == "lawson":
+        cfg, nl, nm = _compact_modes_deck("lawson-rk4-pi"), 2, 4
+    else:
+        cfg, nl, nm = _tiny_kinetic_electron_box()[0], KE_NL, KE_NM
+    cfg = replace(cfg, time=replace(cfg.time, compact_modes=True, t_max=0.01))
+    with pytest.raises(ValueError, match=f"compact_modes.*{named}"):
+        run_runtime_nonlinear(cfg, Nl=nl, Nm=nm, resolved_diagnostics=False)

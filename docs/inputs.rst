@@ -184,6 +184,18 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
 - ``compressed_real_fft`` (default ``true``): compressed real-FFT nonlinear
   bracket; ``false`` uses a full complex FFT and requires two-sided
   ``ky_layout = "full"`` storage. A half-spectrum state is refused.
+- ``compact_modes`` (default ``false``, experimental): the explicit
+  ``rk3``, ``rk4`` and ``rk4-pi`` nonlinear step carries only the kept 2/3
+  ``(ky, kx)`` block and zero-pads it for the bracket transforms. The state,
+  restart files and diagnostics are unchanged, and the result equals the
+  full-grid step to round-off. Adiabatic electrons, electrostatic, linked
+  boundary, ``ky_layout = "half"`` and ``lenard_bernstein`` or no collisions
+  only; other inputs are refused by name. Measured on one RTX A4000, load
+  average 3 to 8 (timings are upper bounds), commit 7638098a, Cyclone G1 deck
+  192 x 64 x 24 at (4, 8), ``rk4-pi``: float32 28.2 to 22.5 ms per step
+  (1.25x); with ``nu_ii = 0.01`` 30.1 to 23.9 ms per step and 392 to 314 s
+  warm to ``t = 1000``; float64 95.8 to 74.1 ms per step (1.29x). Peak device
+  memory did not change (1.64 GB float32).
 - ``checkpoint`` (default ``false``): rematerialize fixed-step explicit
   nonlinear scans during reverse-mode differentiation. This reduces retained
   intermediates at the cost of recomputation, including diagnosed and prepared
@@ -548,6 +560,7 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``collision_scheme``","str","``""implicit""``","Split update: ``implicit``, ``exp``, ``sts`` or ``rkc``."
    "``collision_operator``","str","``""landau""``","Collision model: ``landau``, ``none``, ``lenard_bernstein``, ``sugama``, ``improved_sugama``, ``coulomb``, ``coulomb_finite_kperp``."
    "``compressed_real_fft``","bool","``true``","Evaluate the nonlinear bracket on the half spectrum with paired real FFTs."
+   "``compact_modes``","bool","``false``","Experimental: carry only the kept 2/3 modes inside the explicit nonlinear step."
    "``nonlinear_dealias``","bool","``true``","Apply the 2/3 dealiasing mask to the nonlinear term."
    "``laguerre_nonlinear_mode``","str","``""grid""``","Laguerre treatment of the bracket: ``grid`` or ``spectral``."
    "``run_to``","str","``""saturation""``","Nonlinear stop: ``saturation`` ends the run at a stationary heat flux, ``t_max`` runs the full horizon."

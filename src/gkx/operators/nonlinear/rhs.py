@@ -57,6 +57,7 @@ def _bracket(
             kx_grid=c.kx_grid,
             ky_grid=c.ky_grid,
             ny_full=getattr(c, "ny_full", None),
+            nx_full=getattr(c, "nx_full", None),
             dealias_mask=c.dealias_mask,
             kxfac=c.kxfac,
             laguerre_to_grid=c.laguerre_to_grid,

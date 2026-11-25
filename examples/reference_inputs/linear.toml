@@ -62,6 +62,7 @@ collision_interval = 1  # Explicit steppers apply the split collision operator e
 collision_scheme = "implicit"  # Split update: implicit, exp, sts or rkc
 collision_operator = "landau"  # Collision model: landau, none, lenard_bernstein, sugama, improved_sugama, coulomb, coulomb_finite_kperp
 compressed_real_fft = true  # Evaluate the nonlinear bracket on the half spectrum with paired real FFTs
+compact_modes = false  # Experimental: carry only the kept 2/3 modes inside the explicit nonlinear step
 nonlinear_dealias = true  # Apply the 2/3 dealiasing mask to the nonlinear term
 laguerre_nonlinear_mode = "grid"  # Laguerre treatment of the bracket: grid or spectral
 run_to = "saturation"  # Nonlinear stop: saturation ends the run at a stationary heat flux, t_max runs the full horizon
