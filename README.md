@@ -115,6 +115,41 @@ operator, against 0.0051 from the formula, which the decay rate matches to
 about 10% only below a neoclassical collisionality of 0.3, at the finest resolution
 ([validation](docs/validation.rst)).
 
+## Flow shear and imposed zonal flows
+
+Two `[physics]` keys add an equilibrium ExB flow to a nonlinear run. Both default
+to off.
+
+```toml
+[physics]
+exb_shear = 0.1          # constant shearing rate gamma_E in v_t/a; 0.0 is off
+zonal_flow = [0.0, 0.0, 0.0, 0.4]   # cosine amplitudes of phi_ext, n = 1, 2, ...; [] is off
+# zonal_flow = "profile.txt"        # or two columns, x in rho_ref and phi_ext
+```
+
+`exb_shear` is a constant shearing rate, typically 0.05 to 0.3, with v_t =
+sqrt(T/m). It is sqrt(2) times a GS2 or stella value in sqrt(2T/m)/a and equals
+GX `g_exb`. A wave follows kx*(t) = kx - ky gamma_E t. Use it for a slowly varying
+equilibrium E_r, such as a neoclassical one, where one shearing rate describes the
+box. `zonal_flow` imposes a static potential phi_ext(x) with V_y = dphi_ext/dx
+and local shearing rate d2(phi_ext)/dx2, in the units of phi. Use it when the flow
+reverses within the box. A file must span the built Lx. Details are in
+[numerics](docs/numerics.rst) and [inputs](docs/inputs.rst).
+
+<img src="docs/_static/flow_shear.png" width="760" alt="Cyclone ion heat flux against constant shearing rate for GKX and GX at nx = 192 and 64, and against the peak shear of a four-period zonal flow for two seeds">
+
+Cyclone with adiabatic electrons, each point restarted from a saturated unsheared
+state and averaged over the last half of 250 time units. Left: at nx = 192 the
+flux falls to 7% of the unsheared value at gamma_E = 0.2 in GKX and to 6% in GX.
+Right: a sinusoidal flow of four periods across the box reduces the flux from
+7.4-7.7 to 3.8 at peak shear 0.2, the two seeds agreeing to 5%. The numbers and the plot are in
+`docs/figures/flow_shear.py`.
+
+Restart a sheared run from a saturated unsheared one (`[output] restart`): from
+noise it may not ignite. It also needs a wide kx range, Nx >= 128 for Cyclone.
+Both keys need `nonlinear = true` and refuse `[parallel]` sharding. There is no
+parallel-velocity-gradient drive, and an imposed flow is static.
+
 ## Derivatives and optimization
 
 Eigenvalue derivatives use `dλ/dp = wᴴ(dA/dp)v / (wᴴv)` with residual, overlap
