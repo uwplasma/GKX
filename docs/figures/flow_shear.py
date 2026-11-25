@@ -39,22 +39,49 @@ def main() -> None:
         for i, (label, (c, m, fill, q, e)) in enumerate(FLUX.items()):
             x = [s + 0.002 * i for s in SHEAR]
             col = GKX_COLORS[c]
-            a.errorbar(x, q, e, marker=m, ls="-" if fill else "--", color=col,
-                       mfc=col if fill else "white", capsize=3, ms=5, mew=1.2, mec=col, label=label)
+            a.errorbar(
+                x,
+                q,
+                e,
+                marker=m,
+                ls="-" if fill else "--",
+                color=col,
+                mfc=col if fill else "white",
+                capsize=3,
+                ms=5,
+                mew=1.2,
+                mec=col,
+                label=label,
+            )
         for seed, color in zip(ZONAL, ("blue", "vermillion")):
             q, e = ZONAL[seed]
-            b.errorbar(SHEAR, q, e, marker="o", capsize=3, color=GKX_COLORS[color],
-                       label=f"seed {seed}")
-        a.set(xlabel=r"$\gamma_E\,a/v_t$", ylabel=r"$Q_i$ (gyro-Bohm)",
-              title="constant shear, exb_shear")
-        b.set(xlabel=r"peak shear $\max|\partial_x^2\phi_{ext}|\,a/v_t$",
-              title="four-period zonal flow, zonal_flow")
+            b.errorbar(
+                SHEAR,
+                q,
+                e,
+                marker="o",
+                capsize=3,
+                color=GKX_COLORS[color],
+                label=f"seed {seed}",
+            )
+        a.set(
+            xlabel=r"$\gamma_E\,a/v_t$",
+            ylabel=r"$Q_i$ (gyro-Bohm)",
+            title="constant shear, exb_shear",
+        )
+        b.set(
+            xlabel=r"peak shear $\max|\partial_x^2\phi_{ext}|\,a/v_t$",
+            title="four-period zonal flow, zonal_flow",
+        )
         for ax in (a, b):
             ax.grid(alpha=0.3)
             ax.legend(frameon=False)
         fig.tight_layout()
-        save_figure(fig, Path(__file__).resolve().parents[1] / "_static/flow_shear.png",
-                    palette_colors=96)
+        save_figure(
+            fig,
+            Path(__file__).resolve().parents[1] / "_static/flow_shear.png",
+            palette_colors=96,
+        )
 
 
 if __name__ == "__main__":
