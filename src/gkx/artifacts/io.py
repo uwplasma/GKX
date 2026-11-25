@@ -729,7 +729,7 @@ def _expand_netcdf_restart_state_to_full_positive_ky(
         raise ValueError(
             f"restart Nkx={nakx} does not match nx_full={nx_full} (expected {expected_nakx})"
         )
-    out = np.zeros((nspec, nl, nm, nyc_full, int(nx_full), nz), dtype=np.complex64)
+    out = np.zeros((nspec, nl, nm, nyc_full, int(nx_full), nz), dtype=state.dtype)
     out[..., :naky, _dealiased_kx_indices(int(nx_full)), :] = state
     return out
 
@@ -750,7 +750,7 @@ def _expand_netcdf_restart_state_full_ky(
         raise ValueError(
             f"restart Nkx={nakx} does not match nx_full={nx_full} (expected {expected_nakx})"
         )
-    out = np.zeros((nspec, nl, nm, int(ny_full), int(nx_full), nz), dtype=np.complex64)
+    out = np.zeros((nspec, nl, nm, int(ny_full), int(nx_full), nz), dtype=state.dtype)
     out[..., _dealiased_kx_indices(int(nx_full)), :] = state
     return out
 
@@ -759,6 +759,9 @@ def write_netcdf_restart_state(
     path: str | Path, state: ArrayLike, *, ny_full: int | None = None
 ) -> Path:
     """Write a restart state in flat complex64 restart layout.
+
+    A ``complex128`` state is written as ``complex128``, twice the bytes, which
+    the reader tells apart by size.
 
     The file carries no header, so the reader tells its two accepted forms
     apart by size alone: ``Ny`` stored ``ky`` rows is GKX's own state order,
@@ -778,9 +781,10 @@ def write_netcdf_restart_state(
     already holds a two-sided state does.
     """
 
-    arr = np.asarray(state, dtype=np.complex64)
+    arr = np.asarray(state)
+    arr = arr.astype(np.complex128 if arr.dtype == np.complex128 else np.complex64)
     if ny_full is not None and is_half(int(arr.shape[KY_AXIS]), int(ny_full)):
-        arr = np.asarray(to_full(arr, ny_full=int(ny_full)), dtype=np.complex64)
+        arr = np.asarray(to_full(arr, ny_full=int(ny_full)), dtype=arr.dtype)
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     arr.tofile(out)
@@ -817,12 +821,14 @@ def load_netcdf_restart_state(
         _validate_netcdf_schema_version(root)
         if "G" not in root.variables:
             raise ValueError(f"restart file {path} does not contain variable 'G'")
-        raw = np.asarray(root.variables["G"][:], dtype=float)
+        g_var = root.variables["G"]
+        cdtype = np.complex128 if g_var.dtype == np.float64 else np.complex64
+        raw = np.asarray(g_var[:], dtype=float)
     if raw.ndim != 7 or raw.shape[-1] != 2:
         raise ValueError(f"unexpected NetCDF restart G shape {raw.shape}")
     state_active = raw[..., 0] + 1j * raw[..., 1]
     state_active = np.asarray(
-        np.transpose(state_active, (0, 2, 1, 5, 4, 3)), dtype=np.complex64
+        np.transpose(state_active, (0, 2, 1, 5, 4, 3)), dtype=cdtype
     )
     if state_active.shape[:3] != (int(nspecies), int(Nl), int(Nm)):
         raise ValueError(

@@ -771,10 +771,12 @@ def _load_initial_state_from_file(
             nz=nz,
             ky_layout=ky_layout,
         )
-    raw = np.fromfile(path, dtype=np.complex64)
     nyc = nyc_from_ny(ny)
     expected_nyc = nspecies * Nl * Nm * nyc * nx * nz
     expected_full = nspecies * Nl * Nm * ny * nx * nz
+    # No header: a complex128 file is twice the bytes of either complex64 size.
+    wide = path.stat().st_size in (16 * expected_nyc, 16 * expected_full)
+    raw = np.fromfile(path, dtype=np.complex128 if wide else np.complex64)
     if raw.size == expected_nyc:
         arr = _reshape_netcdf_state(
             raw, nspec=nspecies, nl=Nl, nm=Nm, nyc=nyc, nx=nx, nz=nz
@@ -885,9 +887,7 @@ def _scaled_restart_state(
         nz=grid.z.size,
         ky_layout=source_ky_layout(grid),
     )
-    return np.asarray(loaded_state, dtype=np.complex64) * np.complex64(
-        float(cfg.init.init_file_scale)
-    )
+    return np.asarray(loaded_state) * float(cfg.init.init_file_scale)
 
 
 def _species_targets(cfg: RuntimeConfig, nspecies: int) -> tuple[int, ...]:
@@ -1138,7 +1138,7 @@ def _build_initial_condition(
                 geom,
                 build_runtime_linear_params(cfg, Nm=Nm, geom=geom),
             ),
-            dtype=np.complex64,
+            dtype=loaded_state.dtype,
         )
     amp = float(cfg.init.init_amp)
     builder = _InitialConditionBuilder(

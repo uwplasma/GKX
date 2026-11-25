@@ -170,8 +170,10 @@ inspection and comparison:
 ^^^^^^^^^^^^^^^^
 
 The restart sidecar stores the nonlinear Hermite-Laguerre state in the packed
-restart layout together with the final time. GKX can reload this file
-directly through either:
+restart layout together with the final time. ``G`` is stored as ``f8`` when
+the run is in float64 and as ``f4`` otherwise, so a fixed-step run split at a
+restart equals the uninterrupted run bit for bit in either precision; GX's
+``f4`` files still load. GKX can reload this file directly through either:
 
 - the explicit ``[init] init_file`` path, or
 - the higher-level ``[output] restart*`` controls.
