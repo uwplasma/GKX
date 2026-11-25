@@ -207,8 +207,9 @@ path = "workflows/nonlinear.py"
 # 1288 -> 1300: progress reporter and optional saturation monitoring.
 # 1300 -> 1314: merged with main (#496).
 # 1314 -> 1316: IMEX refusal retried at a smaller first step; the stepper that ran is reported.
-# 1316 -> 1321: [physics] zonal_flow.
-baseline_lines = 1321
+# 1316 -> 1417: [physics] exb_shear route.
+# 1417 -> 1422: [physics] zonal_flow.
+baseline_lines = 1422
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -257,8 +258,9 @@ recursive = true
 # 70084 -> 70091: merged with main (#499).
 # 70091 -> 70386: merged with main (#505).
 # 70386 -> 70391: IMEX refusal retried smaller; the stepper that ran is reported.
-# 70391 -> 70457: [physics] zonal_flow.
-baseline = 70457
+# 70391 -> 70499: [physics] exb_shear route.
+# 70499 -> 70565: [physics] zonal_flow.
+baseline = 70565
 target = 45000
 
 [[line_budget_policy.counts]]
