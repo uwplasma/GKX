@@ -2364,7 +2364,10 @@ def test_run_summary_grid_line_counts_ntheta_by_geometry_model() -> None:
     from gkx.artifacts.run_summary import _resolution_lines
 
     def grid_line(model, **grid):
-        deck = {"geometry": {"model": model}, "grid": {"Nx": 8, "Ny": 8, "Nz": 16, **grid}}
+        deck = {
+            "geometry": {"model": model},
+            "grid": {"Nx": 8, "Ny": 8, "Nz": 16, **grid},
+        }
         return dict(_resolution_lines(deck, {}))["grid"]
 
     assert grid_line("vmec", ntheta=144, nperiod=2) == "Nx x Ny x Nz = 8 x 8 x 144"

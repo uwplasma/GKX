@@ -328,7 +328,7 @@ GENE (``nz0`` with ``n_pol``); it is not a count per turn. The points per turn
 are ``ntheta / npol``. Analytic geometry counts ``ntheta`` per ``2 pi`` segment
 instead, so ``Nz = ntheta (2 nperiod - 1)``. Resolve at least 48 points per
 turn and 16 per field period crossed in one turn (``nfp / |iota|`` periods), that is
-``ntheta >= npol max(48, 16 nfp / |iota|)``; growth rates on four- and five-period
+``ntheta >= npol ``max(48, 16 nfp / abs(iota))````; growth rates on four- and five-period
 stellarators did not converge below that.
 When ``geometry_file`` is set for ``model = "vmec"``, GKX regenerates
 that target instead of reusing a stale file from an older VMEC conversion.

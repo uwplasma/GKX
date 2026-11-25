@@ -1150,10 +1150,15 @@ def test_estimate_floor_counts_npol_turns_of_a_vmec_line(monkeypatch, tmp_path) 
     text = runtime_wout.default_wout_deck_path().read_text(encoding="utf-8")
     deck = tmp_path / "npol5.toml"
     deck.write_text(
-        text.replace("npol = 1.0", "npol = 5.0").replace("nperiod = 1", ""), encoding="utf-8"
+        text.replace("npol = 1.0", "npol = 5.0").replace("nperiod = 1", ""),
+        encoding="utf-8",
     )
-    est = runtime_wout.estimate_resolution("wout_case.nc", deck_path=deck, target_error="cautious")
-    assert est["features"].zp == 5.0 and est["nz"] == 80  # 16 points per turn, not per deck nperiod
+    est = runtime_wout.estimate_resolution(
+        "wout_case.nc", deck_path=deck, target_error="cautious"
+    )
+    assert (
+        est["features"].zp == 5.0 and est["nz"] == 80
+    )  # 16 points per turn, not per deck nperiod
 
 
 def test_wout_flag_parsing_and_output_prefix_rules(tmp_path, monkeypatch) -> None:
