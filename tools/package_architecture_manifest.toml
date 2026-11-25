@@ -153,6 +153,13 @@ public_facades = [
 ]
 
 [[complexity_policy.exceptions]]
+path = "config.py"
+# 1191 -> 1205: [[species]] keys and values checked at load.
+baseline_lines = 1205
+target_lines = 1200
+reason = "Each deck dataclass checks its own values at construction, so the load-time checks sit beside the fields they check."
+
+[[complexity_policy.exceptions]]
 path = "solvers/nonlinear/imex.py"
 baseline_lines = 1966  # unchanged: scan Thomas factor and slim host blocks replace the unrolled loops and the block sets
 target_lines = 1200
@@ -256,7 +263,8 @@ recursive = true
 # 70084 -> 70091: merged with main (#499).
 # 70091 -> 70386: merged with main (#505).
 # 70386 -> 70391: IMEX refusal retried smaller; the stepper that ran is reported.
-baseline = 70391
+# 70391 -> 70410: [[species]] keys and values checked at load.
+baseline = 70410
 target = 45000
 
 [[line_budget_policy.counts]]

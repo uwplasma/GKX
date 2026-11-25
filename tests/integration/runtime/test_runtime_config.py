@@ -251,6 +251,31 @@ def test_runtime_toml_rejects_misspelled_keys_and_sections(tmp_path: Path) -> No
     assert (cfg.geometry.s_hat, cfg.grid.Nz) == (0.3, 32)
 
 
+def test_runtime_toml_rejects_bad_species_at_load(tmp_path: Path) -> None:
+    """Probes 2 to 4 of the code review: species input fails at load, naming the key.
+
+    Before: ``tprimm`` gave a raw ``TypeError``, ``density = -1`` ran and was
+    certified (gamma 0.0993), ``temperature = -1`` failed after 9 s with a
+    ``LinAlgError`` that named no input.
+    """
+
+    from gkx.config import RuntimeSpeciesConfig
+
+    path = tmp_path / "case.toml"
+    head = "schema_version = 1\n[[species]]\nname = 'ion'\n"
+    for body, pattern in (
+        ("tprimm = 3.0\n", r"\[\[species\]\] 'ion'.*'tprimm'.*did you mean 'tprim'"),
+        ("density = -1.0\n", r"'ion': density must be finite and positive, got -1"),
+        ("temperature = -1.0\n", r"'ion': temperature must be finite and positive"),
+    ):
+        path.write_text(head + body, encoding="utf-8")
+        with pytest.raises(ValueError, match=pattern):
+            load_runtime_from_toml(path)
+    for key, value in (("charge", 0.0), ("mass", 0.0), ("nu", float("nan"))):
+        with pytest.raises(ValueError, match=f"'ion': {key} must be finite"):
+            RuntimeSpeciesConfig(**{key: value})
+
+
 def test_zonal_deck_kx_selects_the_fitted_mode() -> None:
     """``[run] kx`` picks the fitted kx; it used to be ignored for kx = 0.
 
@@ -911,7 +936,7 @@ def test_electron_ion_rates_scope_and_refusals() -> None:
     cases = {
         "one kinetic ion": dict(species=(ion,)),
         "finite positive": dict(
-            species=(ion, replace(electron, mass=0.0)),
+            species=(ion, replace(electron, nu=-0.1)),
         ),
         "kinetic, quasineutral": dict(species=(ion, replace(electron, density=2.0))),
         "beta=0 only": dict(physics=replace(physics, beta=1.0e-3)),

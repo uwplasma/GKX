@@ -513,6 +513,20 @@ class RuntimeSpeciesConfig:
     hermite_closure: str = "hypercollision"
 
     def __post_init__(self) -> None:
+        positive = ("mass", "density", "temperature")
+        for key in ("charge", *positive, "tprim", "fprim", "nu"):
+            value = float(getattr(self, key))
+            need = " and positive" if key in positive else ""
+            need = " and nonzero" if key == "charge" else need
+            if (
+                not math.isfinite(value)
+                or (key in positive and value <= 0)
+                or (key == "charge" and value == 0)
+            ):
+                raise ValueError(
+                    f"[[species]] {self.name!r}: {key} must be finite{need}, "
+                    f"got {value}"
+                )
         for name in ("Nl", "Nm"):
             value = getattr(self, name)
             if value is not None and int(value) < 1:
