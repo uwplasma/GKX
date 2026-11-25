@@ -1102,9 +1102,23 @@ def test_identity_gate_reports_a_shape_mismatch_as_a_failure() -> None:
 # ---- end-to-end runtime routing ----
 
 
-@pytest.mark.parametrize("ky_layout", ["full", "half"])
-@pytest.mark.parametrize("num_devices", [2, 4])
-@pytest.mark.parametrize("axis", ["ky", "species_hermite"])
+@pytest.mark.parametrize(
+    ("axis", "num_devices", "ky_layout"),
+    [
+        pytest.param(
+            axis,
+            num_devices,
+            ky_layout,
+            # Over 60 s on a hosted runner; the other seven cases take under 30 s.
+            marks=pytest.mark.slow
+            if (axis, num_devices, ky_layout) == ("species_hermite", 2, "half")
+            else (),
+        )
+        for ky_layout in ("full", "half")
+        for num_devices in (2, 4)
+        for axis in ("ky", "species_hermite")
+    ],
+)
 def test_shard_map_nonlinear_run_matches_serial_diagnostics(
     num_devices: int, ky_layout: str, axis: str
 ) -> None:

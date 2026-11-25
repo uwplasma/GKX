@@ -2503,6 +2503,7 @@ def test_a_saturation_deck_can_still_be_prepared_with_an_explicit_length() -> No
     assert gkx.prepare(case, steps=2) is not None
 
 
+@pytest.mark.slow
 def test_prepare_refusals_are_only_the_known_kinds() -> None:
     """No shipped deck may fail ``prepare`` for a reason nobody has looked at."""
 

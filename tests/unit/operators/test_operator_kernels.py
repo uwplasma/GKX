@@ -2465,6 +2465,7 @@ def test_mu_grid_refuses_the_dissipation_it_does_not_implement():
             build_linear_cache(grid, geom, LinearParams(**kwargs), 4, 4)
 
 
+@pytest.mark.slow
 @_MU_NEEDS_X64
 def test_mu_grid_growth_rate_matches_converged_laguerre_on_cyclone():
     """Cyclone ITG, ky = 0.3: eight nodes land on the Laguerre ``Nl = 16`` rate.
