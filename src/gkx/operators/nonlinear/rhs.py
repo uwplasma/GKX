@@ -9,9 +9,11 @@ isolated and easier to profile.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable
 
 import jax.numpy as jnp
+import numpy as np
 
 from gkx.operators.collision import CollisionOperator
 from gkx.operators.linear.cache_model import LinearCache
@@ -46,6 +48,12 @@ def _bracket(
     def one(
         g: jnp.ndarray, c: LinearCache, p: LinearParams, _: Any = None
     ) -> jnp.ndarray:
+        kw = kwargs
+        if p.zonal_flow is not None:
+            # The imposed zonal potential advects g but is not part of the field solve.
+            phi = kwargs["phi"]
+            zonal = jnp.asarray(p.zonal_flow, dtype=phi.dtype)[:, None]
+            kw = {**kwargs, "phi": phi.at[..., 0, :, :].add(zonal)}
         return fn(
             g,
             Jl=c.Jl,
@@ -65,12 +73,51 @@ def _bracket(
             laguerre_j0=c.laguerre_j0,
             laguerre_j1_over_alpha=c.laguerre_j1_over_alpha,
             b=c.b,
-            **kwargs,
+            **kw,
         )
 
     if getattr(cache, "groups", None) is None:
         return one(G, cache, params)
     return split_species(G, cache, params, one)
+
+
+def zonal_flow_modes(spec: Any, grid: Any) -> jnp.ndarray | None:
+    r"""Project an imposed zonal potential onto the ``kx`` modes of ``grid``.
+
+    ``spec`` is empty (no flow), a path or an ``(N, 2)`` array of ``(x, phi_ext)``
+    samples across the box in :math:`\rho_{ref}`, or a 1-D list of cosine
+    amplitudes :math:`a_n` of :math:`\phi_{ext} = \sum_n a_n\cos(2\pi n x/L_x)`.
+    A profile is taken as periodic over :math:`L_x = 2\pi/\Delta k_x` (the box the
+    grid actually has) and its mean is dropped, since a uniform
+    :math:`E\times B` flow is a Doppler shift. Returns one coefficient per ``kx``.
+    """
+
+    if isinstance(spec, (str, Path)):
+        spec = np.loadtxt(spec)
+    spec = np.asarray(spec, dtype=float)
+    if spec.size == 0:
+        return None
+    kx = np.asarray(grid.kx)
+    dkx = float(np.min(np.abs(kx[kx != 0.0])))
+    n = np.rint(kx / dkx).astype(int)
+    if spec.ndim == 1:
+        coeff = sum(a / 2.0 * (np.abs(n) == h) for h, a in enumerate(spec, 1))
+    else:
+        points = max(256, 8 * kx.size)
+        length = 2.0 * np.pi / dkx
+        extent = float(spec[-1, 0] - spec[0, 0])
+        if abs(extent - length) > 0.01 * length:
+            raise ValueError(
+                f"zonal_flow profile spans {extent:.4g} rho_ref but the built box "
+                f"is Lx = {length:.4g}; resample the profile onto that box"
+            )
+        grid_x = np.arange(points) * length / points
+        values = np.interp(grid_x, spec[:, 0] - spec[0, 0], spec[:, 1], period=length)
+        coeff = np.fft.fft(values)[n % points] / points
+    dtype = jnp.result_type(
+        jnp.asarray(grid.kx), 1j
+    )  # complex64 on f32, else complex128
+    return jnp.asarray(np.where(n == 0, 0.0, coeff), dtype=dtype)
 
 
 def nonlinear_rhs_cached_impl(
@@ -183,4 +230,5 @@ __all__ = [
     "linear_rhs_jit_for_terms_impl",
     "nonlinear_em_term_cached_impl",
     "nonlinear_rhs_cached_impl",
+    "zonal_flow_modes",
 ]
