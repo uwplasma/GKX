@@ -18,12 +18,12 @@ nu = 0.0
 kinetic = true
 
 [grid]
-Nx = 1
-Ny = 12
-Nz = 16
-Lx = 62.8
-Ly = 62.8
-boundary = "periodic"
+Nx = 1  # radial points = kx modes; 1 = the single kx = 0 mode, right for a linear run (nonlinear needs a radial box)
+Ny = 12  # binormal points: 7 ky rows, 0 to 0.6 in steps of 0.1; [run] ky picks one
+Nz = 16  # points along the field line, one 2 pi turn; docs/guidance.rst gives 24-64 per turn, so this is a tutorial size
+Lx = 62.8  # radial box length in rho_i; unused at Nx = 1 (the kx spacing is 2 pi/Lx)
+Ly = 62.8  # binormal box length in rho_i; ky spacing 2 pi/Ly = 0.1
+boundary = "periodic"  # periodic in z; no kx linking
 
 [geometry]
 q = 1.4
@@ -83,8 +83,8 @@ include_stable_modes = false
 channels = ["es"]
 
 [run]
-ky = 0.3
-Nl = 2
-Nm = 4
+ky = 0.3  # k_y rho_i of the single mode, the nearest grid row (spacing 0.1)
+Nl = 2  # Laguerre moments (v_perp); default 12; tutorial size
+Nm = 4  # Hermite moments (v_par); default 24; tutorial size
 # An eigenpair, not a time fit: a 20-unit rk2 run reads gamma 19% low at ky 0.2 to 0.3.
-solver = "krylov"
+solver = "krylov"  # eigenpair of the linear operator

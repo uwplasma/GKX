@@ -371,7 +371,7 @@ transients in the cases that never converged.
    * - ``intermittent``
      - the window holds fewer than ten blocks of at least :math:`4\tau` (so it is
        longer than :math:`40\tau`), or the relative SEM exceeds
-       ``saturation_rel_sem`` (10%)
+       ``saturation_rel_sem`` (5%)
    * - ``unconfirmed``
      - passes now but failed the 80%-prefix check of item 5
    * - ``saturated``
@@ -380,16 +380,25 @@ transients in the cases that never converged.
    * - ``cap_reached:<status>``
      - ``t_max`` was reached without ``saturated``
 
-Nothing is called saturated before ``saturation_t_min``, which defaults to
-:math:`\min(800, 0.95\,t_{max})` :math:`a/v_t`; the shortest window, 250, shrinks
-to :math:`t_{max}/4` on a short run.
-Published practice is of that order: the GX stellarator flux database of
-Landreman et al. [Landreman25]_ discards :math:`t<150` and runs to 800 :math:`a/v_t`,
-CGYRO production runs use at least 500 :math:`a/c_s`, and GENE averaging windows
-are of order 1000. Lowering the floor to half of ``t_max`` was tried on the recorded traces and
-called B11, whose heat flux rises about 40% later, saturated at 576. The Oberparleiter et al. stopping rule
-[Oberparleiter16]_ motivates stopping on an error estimate rather than a
-fixed time.
+A saturation verdict requires at least ``saturation_t_min`` of run time, which
+by default is :math:`\min(300, 0.95\,t_{max})` :math:`a/v_t`. The shortest
+averaging window is 250, shortened to :math:`t_{max}/4` for shorter runs.
+A relative batch-means SEM no greater than 5% is one of the stop gates.
+
+In the QA study of :ref:`turbulence-defaults`, changing the earliest verdict
+time from 800 to 300 moved the stop from 801 to 481. The stopped mean differed
+by 0.9% from the mean through time 1000. In 100 synthetic lognormal QA-like
+traces (11% relative spread, correlation time 7.5), 97% of stopped means were
+within 5% of the true mean at 300, and 99% at 800. At 15% spread and correlation
+time 15, the corresponding fractions were 84% and 86%. One archived case,
+B11, was declared saturated at 576 in the previous floor sensitivity study
+and later increased its heat flux by about 40%.
+
+Published studies use longer windows. The GX stellarator flux database of
+Landreman et al. [Landreman25]_ discards :math:`t<150` and runs to 800
+:math:`a/v_t`, CGYRO production runs use at least 500 :math:`a/c_s`, and GENE
+averaging windows are of order 1000. The Oberparleiter et al. stopping rule
+[Oberparleiter16]_ motivates using an error estimate to choose a stop time.
 
 These are finite-sample safeguards, not a sequential-confidence guarantee. On
 stationary synthetic traces the quoted SEM covers the true mean about 85% of

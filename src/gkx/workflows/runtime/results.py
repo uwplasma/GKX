@@ -274,6 +274,8 @@ class RuntimeNonlinearResult(_ResultArtifacts):
     saturation: dict[str, Any] | None = None
     # Every GMRES solve of an IMEX run; None for explicit methods.
     implicit_solve: ImplicitSolveSummary | None = None
+    # The stepper that ran, which differs from the requested one after a fallback.
+    integrator: str | None = None
     # Actual normalized dimensions survive omission of the large state array.
     _state_shape: tuple[int, ...] | None = None
 
@@ -298,6 +300,7 @@ class RuntimeNonlinearResult(_ResultArtifacts):
             "n_samples": int(t.size),
             "ky_selected": self.ky_selected,
             "kx_selected": self.kx_selected,
+            "integrator": self.integrator,
             "wall_seconds": self.wall_seconds,
             "saturated": saturation.get("saturated"),
             "saturation_status": saturation.get("status"),

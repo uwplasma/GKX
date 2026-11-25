@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import hashlib
+import importlib
 import json
 import os
 import math
 from pathlib import Path
+from typing import Callable
+
+import numpy as np
 
 from gkx.config import REFERENCE_ELECTRON_MASS
 from gkx.geometry.backend_discovery import geometry_precision
@@ -195,6 +199,12 @@ def generate_runtime_vmec_eik(
 ) -> Path:
     """Generate or reuse an internal-backend ``*.eik.nc`` file from a runtime config."""
 
+    model = str(cfg.geometry.model).strip().lower()
+    if model in {"desc", "gvec"}:
+        wout = _convert_equilibrium(model, cfg.geometry.vmec_file, _DEFAULT_CACHE_DIR)
+        cfg = replace(
+            cfg, geometry=replace(cfg.geometry, model="vmec", vmec_file=str(wout))
+        )
     request = build_vmec_geometry_request(cfg)
     resolved_output = output_path
     default_cache_output = False
@@ -254,3 +264,279 @@ _VMEC_EIK_DEFAULT_REQUEST: dict[str, object] = {
     "vnewk": (0.0, 0.0),
     "species_type": ("ion", "electron"),
 }
+
+
+# ---- DESC and GVEC equilibria as VMEC wout files ----
+# A DESC or GVEC equilibrium is sampled on flux surfaces in its own straight-field-line
+# angles, Fourier analysed in the VMEC convention and written as a stellarator-symmetric
+# wout, so every coefficient comes from the VMEC code path. desc-opt and gvec are
+# imported only when selected.
+
+
+def _modes(mpol: int, ntor: int, nfp: int) -> tuple[np.ndarray, np.ndarray]:
+    mn = [(m, n) for m in range(mpol) for n in range(0 if m == 0 else -ntor, ntor + 1)]
+    return np.array([m for m, _ in mn], float), np.array(
+        [n * nfp for _, n in mn], float
+    )
+
+
+def write_wout(
+    path: str | Path,
+    *,
+    nfp: int,
+    mpol: int,
+    ntor: int,
+    ns: int,
+    sample: Callable[..., dict[str, np.ndarray]],
+    iota: Callable[[np.ndarray], np.ndarray],
+    pres: Callable[[np.ndarray], np.ndarray],
+    phiedge: float,
+    aminor: float,
+    raxis: float,
+) -> Path:
+    """Write a stellarator-symmetric wout from a surface sampler.
+
+    ``sample(fields, s, theta, zeta)`` returns the requested fields among R, Z,
+    lam (theta* - theta), B, Bu, Bv (covariant components) on the tensor grid
+    (s, theta, zeta) for the VMEC angles theta and zeta (zeta in [0, 2 pi / nfp)).
+    """
+
+    import netCDF4 as nc
+
+    mpol, ntor = int(mpol), int(ntor)
+    mn_b, nn_b = 2 * mpol, 2 * ntor
+    xm, xn = _modes(mpol, ntor, nfp)
+    xmq, xnq = _modes(mn_b, nn_b, nfp)
+    nth, nze = 2 * mn_b + 2, 2 * nn_b + 2
+    th = np.linspace(0.0, 2.0 * np.pi, nth, endpoint=False)
+    ze = np.linspace(0.0, 2.0 * np.pi / nfp, nze, endpoint=False)
+    s_full = np.linspace(0.0, 1.0, ns)
+    s_half = 0.5 * (s_full[:-1] + s_full[1:])
+    T, Z_ = np.meshgrid(th, ze, indexing="ij")
+
+    def angle(m: np.ndarray, n: np.ndarray) -> np.ndarray:
+        return m[None, :] * T.ravel()[:, None] - n[None, :] * Z_.ravel()[:, None]
+
+    pc = np.linalg.pinv(np.cos(angle(xm, xn)))
+    ps = np.linalg.pinv(np.sin(angle(xm, xn)))
+    pcq = np.linalg.pinv(np.cos(angle(xmq, xnq)))
+
+    full = sample(("R", "Z"), s_full[1:], th, ze)
+    half = sample(("lam", "B", "Bu", "Bv"), s_half, th, ze)
+
+    def coef(a: np.ndarray, p: np.ndarray) -> np.ndarray:
+        return np.asarray(a).reshape(a.shape[0], -1) @ p.T
+
+    rmnc, zmns = coef(full["R"], pc), coef(full["Z"], ps)
+    rmnc = np.vstack([np.zeros(len(xm)), rmnc])
+    zmns = np.vstack([np.zeros(len(xm)), zmns])
+    lmns = np.vstack([np.zeros(len(xm)), coef(half["lam"], ps)])
+    bmnc = np.vstack([np.zeros(len(xmq)), coef(half["B"], pcq)])
+    bu = np.vstack([np.zeros(len(xmq)), coef(half["Bu"], pcq)])
+    bv = np.vstack([np.zeros(len(xmq)), coef(half["Bv"], pcq)])
+    # Axis: extrapolate the m=0 harmonics linearly in rho = sqrt(s) from two surfaces.
+    r1, r2 = np.sqrt(s_full[1]), np.sqrt(s_full[2])
+    for a in (rmnc, zmns):
+        a[0] = a[1] - (a[2] - a[1]) * r1 / (r2 - r1)
+        a[0, xm > 0] = 0.0
+
+    out = Path(path)
+    with nc.Dataset(out, "w") as d:
+        d.createDimension("radius", ns)
+        d.createDimension("mn_mode", len(xm))
+        d.createDimension("mn_mode_nyq", len(xmq))
+        d.createDimension("n_tor", ntor + 1)
+
+        def put(name: str, value, dims: tuple[str, ...] = (), dt: str = "f8") -> None:
+            d.createVariable(name, dt, dims)[:] = value
+
+        for k, v in dict(
+            nfp=nfp,
+            ns=ns,
+            mpol=mpol,
+            ntor=ntor,
+            mnmax=len(xm),
+            mnmax_nyq=len(xmq),
+            lasym__logical__=0,
+        ).items():
+            put(k, v, dt="i4")
+        put("xm", xm, ("mn_mode",))
+        put("xn", xn, ("mn_mode",))
+        put("xm_nyq", xmq, ("mn_mode_nyq",))
+        put("xn_nyq", xnq, ("mn_mode_nyq",))
+        for name, a in (("rmnc", rmnc), ("zmns", zmns), ("lmns", lmns)):
+            put(name, a, ("radius", "mn_mode"))
+        for name, a in (("bmnc", bmnc), ("bsubumnc", bu), ("bsubvmnc", bv)):
+            put(name, a, ("radius", "mn_mode_nyq"))
+        for name, a in (
+            ("iotas", np.r_[0.0, iota(s_half)]),
+            ("pres", np.r_[0.0, pres(s_half)]),
+            ("phi", phiedge * s_full),
+            ("phipf", np.full(ns, phiedge / (2 * np.pi))),
+            ("chi", np.zeros(ns)),
+        ):
+            put(name, a, ("radius",))
+        put("Aminor_p", aminor)
+        put(
+            "raxis_cc",
+            raxis * np.ones(ntor + 1) * (np.arange(ntor + 1) == 0),
+            ("n_tor",),
+        )
+    return out
+
+
+def _cached(
+    path: Path, kind: str, convert: Callable[[Path], Path], cache: Path
+) -> Path:
+    stat = path.stat()
+    key = f"{path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}|{kind}"
+    out = (
+        cache
+        / f"{path.stem}_{kind}_{hashlib.sha256(key.encode()).hexdigest()[:12]}.wout.nc"
+    )
+    if not out.exists():
+        cache.mkdir(parents=True, exist_ok=True)
+        tmp = out.with_suffix(".tmp.nc")
+        convert(tmp)
+        os.replace(tmp, out)
+    return out
+
+
+def desc_to_wout(h5: str | Path, out: str | Path, *, ns: int = 16) -> Path:
+    """Write a wout from a DESC equilibrium (``.h5``)."""
+
+    import desc.io
+    from desc.grid import LinearGrid
+
+    eq = desc.io.load(str(h5))
+    eq = eq[-1] if hasattr(eq, "__len__") else eq
+    if not eq.sym:
+        raise ValueError("DESC geometry requires a stellarator-symmetric equilibrium")
+    keys = dict(R="R", Z="Z", lam="lambda", B="|B|", Bu="B_theta", Bv="B_zeta")
+
+    def sample(fields, s, th, ze):
+        grid = LinearGrid(rho=np.sqrt(s), theta=len(th), zeta=len(ze), NFP=eq.NFP)
+        data = eq.compute([keys[k] for k in fields], grid=grid)
+        shape = (len(ze), len(s), len(th))  # DESC meshgrid order: zeta, rho, theta
+        return {k: data[keys[k]].reshape(shape).transpose(1, 2, 0) for k in fields}
+
+    def flux(name):
+        def f(s):
+            return eq.compute(name, grid=LinearGrid(rho=np.sqrt(s), M=0, N=0))[name]
+
+        return f
+
+    return write_wout(
+        out,
+        nfp=eq.NFP,
+        mpol=eq.M + 1,
+        ntor=eq.N,
+        ns=ns,
+        sample=sample,
+        iota=flux("iota"),
+        pres=flux("p"),
+        phiedge=float(eq.Psi),
+        aminor=float(eq.compute("a")["a"]),
+        raxis=float(np.sum(eq.axis.R_n)),
+    )
+
+
+def gvec_to_wout(state_file: str | Path, out: str | Path, *, ns: int = 16) -> Path:
+    """Write a wout from a GVEC state (``*State*.dat``) next to its ``parameter.ini``.
+
+    GVEC runs with zeta = -phi, so the VMEC angle v is -zeta and the iota,
+    covariant B_v and edge flux change sign.
+    """
+
+    import gvec
+
+    state_file = Path(state_file)
+    params = state_file.with_name("parameter.ini")
+    if not params.exists():
+        params = next(state_file.parent.glob("*.ini"), params)
+    st = gvec.load_state(params, state_file)
+    if [st.parameters.get(f"{k}_sin_cos") for k in ("X1", "X2", "LA")] != [
+        "_cos_",
+        "_sin_",
+        "_sin_",
+    ]:
+        raise ValueError("GVEC geometry requires a stellarator-symmetric state")
+    mpol, ntor = st.get_mn_max("X1")
+    mpol += 1
+
+    def sample(fields, s, th, ze):
+        need = {"R": "X1", "Z": "X2", "lam": "LA", "B": "mod_B"}
+        names = [need[f] for f in fields if f in need]
+        if "Bu" in fields:
+            names += ["B", "e_theta", "e_zeta"]
+        ev = st.evaluate(*names, rho=np.sqrt(s), theta=th, zeta=-ze)
+        out = {f: ev[need[f]].values for f in fields if f in need}
+        if "Bu" in fields:
+            out["Bu"] = (ev.B * ev.e_theta).sum("xyz").values
+            out["Bv"] = -(ev.B * ev.e_zeta).sum("xyz").values
+        return out
+
+    def flux(name, sign=1.0):
+        return lambda s: (
+            sign * st.evaluate(name, rho=np.sqrt(s), theta=None, zeta=None)[name].values
+        )
+
+    th = np.linspace(0.0, 2.0 * np.pi, 400, endpoint=False)
+    edge = st.evaluate(
+        "X1",
+        "X2",
+        "dX1_dt",
+        "dX2_dt",
+        "Phi_edge",
+        rho=np.array([1.0]),
+        theta=th,
+        zeta=np.zeros(1),
+    )
+    area = (
+        abs(
+            np.mean(
+                edge.X1.values * edge.dX2_dt.values
+                - edge.X2.values * edge.dX1_dt.values
+            )
+        )
+        * np.pi
+    )
+    axis = st.evaluate("X1", rho=np.zeros(1), theta=np.zeros(1), zeta=np.zeros(1))
+    return write_wout(
+        out,
+        nfp=st.nfp,
+        mpol=mpol,
+        ntor=ntor,
+        ns=ns,
+        sample=sample,
+        iota=flux("iota", -1.0),
+        pres=flux("p"),
+        phiedge=-2.0 * np.pi * float(edge.Phi_edge),
+        aminor=float(np.sqrt(area / np.pi)),
+        raxis=float(axis.X1.values.item()),
+    )
+
+
+def _convert_equilibrium(
+    model: str, path: str | Path | None, cache: Path, **kw
+) -> Path:
+    """Return a cached wout for a ``desc`` or ``gvec`` equilibrium file."""
+
+    if path is None:
+        raise ValueError(
+            f"geometry.model = '{model}' requires an equilibrium file path"
+        )
+    src = Path(os.path.expandvars(str(path))).expanduser()
+    to_wout = {"desc": desc_to_wout, "gvec": gvec_to_wout}[model]
+
+    def convert(out: Path) -> Path:
+        try:
+            importlib.import_module(model)
+        except ImportError as err:
+            raise ImportError(
+                f"geometry.model = '{model}' needs the optional package: "
+                f"pip install 'gkx[{model}]'"
+            ) from err
+        return to_wout(src, out, **kw)
+
+    return _cached(src, model, convert, cache / "wout")

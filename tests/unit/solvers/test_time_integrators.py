@@ -18,6 +18,7 @@ from scripts.checks._gates.validation_gates import (
     estimate_observed_order,
 )
 from gkx.solvers.nonlinear.explicit import (
+    _apply_explicit_collision_split,
     _checkpoint_block_size,
     block_checkpoint_plan,
     advance_explicit_nonlinear_state,
@@ -1720,3 +1721,26 @@ def test_retired_stepper_names_raise_with_replacement(method, replacement) -> No
             project_state=lambda state: state,
             state_dtype=jnp.float32,
         )
+
+
+def test_collision_interval_applies_the_split_every_nth_step_with_n_dt() -> None:
+    def split(G, damping, dt, scheme):
+        return G * (1.0 - dt)
+
+    G = jnp.ones(3)
+    out = [
+        _apply_explicit_collision_split(
+            G,
+            jnp.asarray(0.1),
+            use_collision_split=True,
+            damping=None,
+            collision_scheme="implicit",
+            apply_collision_split_fn=split,
+            interval=3,
+            idx=jnp.asarray(i),
+        )
+        for i in range(3)
+    ]
+    np.testing.assert_allclose(np.asarray(out[0]), 1.0)
+    np.testing.assert_allclose(np.asarray(out[1]), 1.0)
+    np.testing.assert_allclose(np.asarray(out[2]), 0.7, rtol=1e-6)  # 3 * dt

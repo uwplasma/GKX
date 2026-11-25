@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, fields as dataclass_fields, replace
 from pathlib import Path
 import time
@@ -9,7 +10,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from gkx.callbacks import _format_duration as format_duration
+from gkx.callbacks import _format_duration
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.diagnostics.metadata import ResolvedDiagnostics
 from gkx.workflows.runtime.diagnostic_arrays import (
@@ -22,53 +23,116 @@ from gkx.workflows.runtime.diagnostic_arrays import (
 from gkx.terms.config import FieldState
 
 
-@dataclass(frozen=True)
-class RuntimeProgressSnapshot:
-    """Computed wall-clock progress fields for a chunked runtime update."""
+def _flux_status(decision: dict[str, Any] | None) -> str:
+    """Convergence wording for the saturation detector's latest verdict."""
 
-    progress: float
-    eta_seconds: float
-    chunk_wall_seconds: float
-    elapsed_seconds: float
+    d = decision or {}
+    if (
+        d.get("mean") is None
+        or d.get("sem") is None
+        or d.get("status")
+        in (
+            "growing",
+            "quiescent",
+        )
+    ):
+        return "transient"
+    word = "saturated" if d.get("saturated") else "saturating"
+    return f"{word}: Q={d['mean']:.3g}+-{d['sem']:.2g}"
 
 
-def build_runtime_progress_message(
-    *,
-    label: str,
-    chunk_index: int,
-    t_elapsed: float,
-    t_max: float,
-    chunk_wall_seconds: float,
-    elapsed_seconds: float,
-) -> tuple[str, RuntimeProgressSnapshot]:
-    """Return the standard adaptive-runtime progress line and policy snapshot."""
+class ProgressReporter:
+    """Status callback of a nonlinear run that prints one progress line per ``interval`` seconds.
 
-    progress = (
-        min(max(float(t_elapsed) / float(t_max), 0.0), 1.0)
-        if float(t_max) > 0.0
-        else 1.0
-    )
-    eta = (
-        float(elapsed_seconds) * (1.0 / progress - 1.0)
-        if progress > 1.0e-12
-        else float("inf")
-    )
-    eta_text = format_duration(eta) if np.isfinite(eta) else "--:--"
-    snapshot = RuntimeProgressSnapshot(
-        progress=float(progress),
-        eta_seconds=float(eta),
-        chunk_wall_seconds=max(float(chunk_wall_seconds), 0.0),
-        elapsed_seconds=max(float(elapsed_seconds), 0.0),
-    )
-    message = (
-        f"completed {label} chunk {int(chunk_index)}: "
-        f"t={float(t_elapsed):.6g}/{float(t_max):.6g} "
-        f"progress={100.0 * snapshot.progress:5.1f}% "
-        f"chunk_wall={format_duration(snapshot.chunk_wall_seconds)} "
-        f"elapsed={format_duration(snapshot.elapsed_seconds)} "
-        f"eta={eta_text}"
-    )
-    return message, snapshot
+    Pass it as ``status_callback``: setup messages are printed as they come, the
+    run reports through :meth:`update`, and :meth:`finish` prints the summary
+    and writes the figures. ``clock`` and ``emit`` can be replaced for tests.
+    """
+
+    def __init__(
+        self,
+        emit: Callable[[str], None] | None = None,
+        *,
+        interval: float = 2.0,
+        window: float = 10.0,
+        clock: Callable[[], float] = time.perf_counter,
+    ) -> None:
+        self.emit = emit or (lambda message: print(message, flush=True))
+        self.interval, self.window, self.clock = interval, window, clock
+        self.start: float | None = None  # set by the first message
+        self._last: float | None = None
+        self._points: deque[tuple[float, float]] = deque()
+
+    def _begin(self, now: float) -> float:
+        """Elapsed time counts from the first message of the solve."""
+
+        self.start = now if self.start is None else self.start
+        return self.start
+
+    def __call__(self, message: str) -> None:
+        self._begin(self.clock())
+        self.emit(message)
+
+    def update(
+        self, t: float, t_max: float, q: Any, decision: dict[str, Any] | None = None
+    ) -> None:
+        """Record the simulation time reached; print when ``interval`` has passed."""
+
+        now = self.clock()
+        self._begin(now)
+        if not t_max > 0:  # zero-length run: nothing to report
+            return
+        pts = self._points
+        pts.append((now, t))
+        while len(pts) > 2 and now - pts[1][0] >= self.window:
+            pts.popleft()
+        if (
+            self._last is not None
+            and now - self._last < self.interval
+            and t < t_max * (1 - 1e-6)
+        ):
+            return
+        self._last = now
+        (w0, t0), rate = pts[0], 0.0
+        if t > t0:
+            rate = (t - t0) / max(now - w0, 1e-12)
+        eta = _format_duration((t_max - t) / rate) if rate > 0 else "--:--"
+        print_q = ", ".join(f"{float(x):.3g}" for x in q)
+        self.emit(
+            f"{_format_duration(now - self._begin(now))}  t={t:.6g}/{t_max:.6g}  "
+            f"{100 * min(t / t_max, 1):3.0f}%  eta {eta}  Q={print_q}  "
+            f"{_flux_status(decision)}"
+        )
+
+    def finish(self, result: Any, plot: Any = None, *, ky: Any = None) -> None:
+        """Print the run summary; write the figures at ``plot`` (a path stem) if given."""
+
+        sat = result.saturation or {}
+        diag = result.diagnostics
+        t = np.asarray(result.t, dtype=float)
+        t_end = float(t[-1]) if t.size else 0.0
+        dt = float(getattr(diag, "dt_mean", 0.0) or 0.0)
+        steps = round(t_end / dt) if np.isfinite(dt) and dt > 0 else 0
+        sem = sat.get("sem")
+        q = (
+            "no saturation estimate"
+            if sat.get("mean") is None or not np.isfinite(sat["mean"])
+            else f"Q={sat['mean']:.4g}{'' if sem is None else f'+-{sem:.2g}'} ({sat['status']})"
+        )
+        self.emit(
+            f"done in {_format_duration(self.clock() - self._begin(self.clock()))}: "
+            f"t={t_end:.6g}, {steps} steps, {q}"
+        )
+        if plot is not None:
+            from gkx.artifacts.run_figures import plot_nonlinear_result
+
+            try:
+                paths = plot_nonlinear_result(result, plot, ky=ky)
+            except Exception as exc:  # a headless or broken backend never aborts a run
+                self.emit(f"could not write the result plot: {exc}")
+                paths = []
+            for path in paths:
+                self.emit(f"saved {path}")
 
 
 @dataclass(frozen=True)
@@ -85,6 +149,7 @@ class AdaptiveChunkResult:
 
 
 _TIME_PROGRESS_EPS = 1.0e-12
+_MAX_STALLED_CHUNKS = 8
 
 
 def _chunk_diagnostics_to_host(diag: SimulationDiagnostics) -> SimulationDiagnostics:
@@ -186,8 +251,10 @@ def _next_elapsed_time(
     """Validate and return the accumulated end time for one adaptive chunk."""
 
     t_next = _chunk_end_time(diag, label=label, chunk_index=chunk_index)
-    if t_next <= float(previous_elapsed) + _TIME_PROGRESS_EPS:
-        raise RuntimeError(f"adaptive {label} runtime made no time-step progress")
+    if t_next < float(previous_elapsed) - _TIME_PROGRESS_EPS:
+        raise RuntimeError(
+            f"adaptive {label} chunk {int(chunk_index)} moved time backwards"
+        )
     return t_next
 
 
@@ -211,7 +278,8 @@ def run_adaptive_runtime_chunk_loop(
     diagnostics_interval: float | None = None,
     time_offset: float = 0.0,
     progress_t_max: float | None = None,
-    progress_wall_start: float | None = None,
+    progress: Callable[..., None] | None = None,
+    monitor: Callable[[np.ndarray, np.ndarray, bool], dict[str, Any]] | None = None,
     max_chunks: int = 100000,
     horizon_slack: float = 0.0,
     spill_dir: Path | None = None,
@@ -226,6 +294,7 @@ def run_adaptive_runtime_chunk_loop(
 
     state_chunk = None
     t_elapsed = 0.0
+    stalled = 0
     stride = _effective_diagnostics_stride(diagnostics_stride)
     # Preserve the global stride phase across chunks.
     samples_seen = 0
@@ -237,19 +306,15 @@ def run_adaptive_runtime_chunk_loop(
     if spill_dir is not None:
         spill_dir.mkdir(parents=True, exist_ok=True)
     fields_final: FieldState | None = None
-    wall_start = (
-        time.perf_counter() if progress_wall_start is None else progress_wall_start
-    )
     progress_target = (
         float(t_max) + time_offset if progress_t_max is None else progress_t_max
     )
     _status(
-        f"starting {label} integration in chunks of {chunk_steps} steps "
-        f"from t={time_offset:.6g} up to t_max={progress_target:.6g}"
+        f"integrating {label} from t={time_offset:.6g} up to t_max={progress_target:.6g}"
+        " (the first progress line follows compilation)"
     )
 
     for chunk in range(max_chunks):
-        chunk_start = time.perf_counter()
         remaining_time = max(float(t_max) - t_elapsed, 0.0)
         _t_chunk, diag_chunk, state_chunk, fields_final = integrate_chunk(
             False, remaining_time
@@ -280,6 +345,16 @@ def run_adaptive_runtime_chunk_loop(
             label=label,
             chunk_index=chunk_index,
         )
+        # A chunk whose steps were all rejected (rk4-pi keeps the state and retries
+        # at a smaller step) ends where it started; only a run of them is a stall.
+        if t_next <= t_elapsed + _TIME_PROGRESS_EPS:
+            stalled += 1
+            if stalled > _MAX_STALLED_CHUNKS:
+                raise RuntimeError(
+                    f"adaptive {label} runtime made no time-step progress"
+                )
+            continue
+        stalled = 0
         if t_next > float(t_max) + time_tol:
             raise RuntimeError(
                 f"adaptive {label} chunk {chunk_index} crossed t_max; "
@@ -289,19 +364,27 @@ def run_adaptive_runtime_chunk_loop(
         t_elapsed = t_next
         reached_horizon = t_elapsed >= float(t_max) - time_tol
         stop_now = False
-        if stop_condition is not None:
+        decision: dict[str, Any] | None = None
+        check = stop_condition or monitor
+        if check is not None:
             species = diag_chunk.heat_flux_species_t
             flux = diag_chunk.heat_flux_t if species is None else species
             trace_chunks.append(
                 (np.asarray(diag_chunk.t), np.asarray(flux, dtype=float))
             )
-            stop_decision = stop_condition(
+            decision = check(
                 np.concatenate([chunk[0] for chunk in trace_chunks]),
                 np.concatenate([chunk[1] for chunk in trace_chunks]),
                 reached_horizon,
             )
-            stop_now = bool(stop_decision.get("stop"))
+            if stop_condition is not None:
+                stop_decision = decision
+                stop_now = bool(decision.get("stop"))
         chunk_samples = int(np.asarray(diag_chunk.t).shape[0])
+        by_species = diag_chunk.heat_flux_species_t
+        q_last = np.atleast_1d(
+            np.asarray(diag_chunk.heat_flux_t if by_species is None else by_species)[-1]
+        )
         if diagnostics_interval is not None:
             diag_chunk = _time_sample_runtime_diagnostics(
                 diag_chunk,
@@ -322,17 +405,8 @@ def run_adaptive_runtime_chunk_loop(
             diag_chunks.append(diag_chunk)
         else:
             spill_paths.append(_spill_chunk(diag_chunk, spill_dir, chunk_index))
-        chunk_wall = max(time.perf_counter() - chunk_start, 0.0)
-        wall_elapsed = max(time.perf_counter() - wall_start, 0.0)
-        message, _snapshot = build_runtime_progress_message(
-            label=label,
-            chunk_index=chunk_index,
-            t_elapsed=t_elapsed + time_offset,
-            t_max=progress_target,
-            chunk_wall_seconds=chunk_wall,
-            elapsed_seconds=wall_elapsed,
-        )
-        _status(message)
+        if progress is not None:
+            progress(t_elapsed + time_offset, progress_target, q_last, decision)
         if stop_now:
             _status(f"stopping {label} integration at t={t_elapsed + time_offset:.6g}")
             break

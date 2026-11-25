@@ -176,7 +176,14 @@ def _build_time_step_limits(
         dt_init=dt_init,
         progress_total=progress_total,
         dt_min=jnp.asarray(dt_min, dtype=real_dtype),
-        dt_max=jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype),
+        # Unset: the controlled rk4-pi steppers are bounded by 2x CFL and their
+        # error estimate, so the deck dt is only their first step.
+        dt_max=jnp.asarray(
+            (jnp.inf if method.endswith("rk4-pi") else dt)
+            if dt_max is None
+            else dt_max,
+            dtype=real_dtype,
+        ),
         cfl=jnp.asarray(cfl, dtype=real_dtype),
         cfl_fac=jnp.asarray(
             resolve_cfl_fac_fn(method, cfl_fac, moments), dtype=real_dtype

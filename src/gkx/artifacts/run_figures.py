@@ -208,6 +208,42 @@ def write_nonlinear_run_figures(
     return written
 
 
+def plot_nonlinear_result(
+    result: Any, stem: str | Path, *, ky: Any = None
+) -> list[Path]:
+    """Write ``<stem>.flux_time.png`` (and ``.flux_spectra.png`` given the ``ky`` axis).
+
+    The first shows ``Q(t)`` per species with the saturation window and its
+    mean +/- SEM band. The spectrum needs resolved diagnostics. Any plotting
+    failure is reported and skipped, so a headless run is never aborted.
+    """
+
+    from gkx.artifacts.transport_figures import (
+        flux_spectra_figure,
+        heat_flux_time_figure,
+    )
+
+    window = measured_average_window({"saturation": result.saturation})
+    resolved = getattr(result.diagnostics, "resolved", None)
+    plan = [
+        (
+            TIME_TRACE_SUFFIX,
+            lambda out: heat_flux_time_figure(result, window=window, out=out),
+        )
+    ]
+    if ky is not None and getattr(resolved, "HeatFlux_kyst", None) is not None:
+        plan.append(
+            (
+                FLUX_SPECTRA_SUFFIX,
+                lambda out: flux_spectra_figure(
+                    result, ky=ky, window=window, panels=("ky",), out=out
+                ),
+            )
+        )
+    drawn = (_render(Path(f"{stem}.{suffix}.png"), draw) for suffix, draw in plan)
+    return [path for path in drawn if path is not None]
+
+
 def write_panel_run_figure(source: str | Path) -> list[Path]:
     """Write the single saved-output panel used by linear points and scans."""
 
@@ -316,6 +352,7 @@ __all__ = [
     "auto_plot_saved_run",
     "is_gkx_nonlinear_bundle",
     "measured_average_window",
+    "plot_nonlinear_result",
     "replot_nonlinear_bundle",
     "write_nonlinear_run_figures",
     "write_panel_run_figure",
