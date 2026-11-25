@@ -161,6 +161,23 @@ def test_ci_wide_coverage_matrix_matches_the_shard_count() -> None:
     wide_shards = wide_job["strategy"]["matrix"]["shard"]
     shard_count = len(wide_shards)
     assert wide_shards == list(range(1, shard_count + 1))
+    groups = wide_job["strategy"]["matrix"]["include"]
+    assert sorted(group["shard"] for group in groups) == wide_shards
+    assert all(group["tests"].strip() for group in groups)
+    # The last group runs ``tests`` minus what the others name: the two lists
+    # must be the same set, or a test runs twice or in no group.
+    *named_groups, rest = sorted(groups, key=lambda group: group["shard"])
+    named = {
+        token
+        for group in named_groups
+        for token in group["tests"].split()
+        if not token.startswith("--")
+    }
+    rest_tokens = rest["tests"].split()
+    ignored = {t.removeprefix("--ignore=") for t in rest_tokens if t.startswith("--")}
+    assert [t for t in rest_tokens if not t.startswith("--")] == ["tests"]
+    assert ignored == named
+    assert all((root / path).exists() for path in named)
 
     shard_step = next(
         step
@@ -173,7 +190,7 @@ def test_ci_wide_coverage_matrix_matches_the_shard_count() -> None:
         if step.get("name") == "Combine wide package coverage"
     )
     assert f"/{shard_count}" in shard_step["name"]
-    assert f"--shards {shard_count}" in shard_step["run"]
+    assert "matrix.tests" in shard_step["run"]
     assert f"--shards {shard_count}" in combine_step["run"]
 
 

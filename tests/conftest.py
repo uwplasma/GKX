@@ -4,6 +4,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 # Tests compile in-process; a shared on-disk cache would only add cross-run state.
 os.environ.setdefault("GKX_JAX_CACHE", "0")
 
@@ -78,6 +80,43 @@ def _precision_environment() -> tuple[bool, list[str]]:
     )
     missing = [name for name, enabled in checks if not enabled]
     return not missing, missing
+
+
+def pytest_addoption(parser) -> None:
+    parser.addoption(
+        "--node-chunk",
+        default=None,
+        metavar="FILE:I/N",
+        help="Keep only the I-th of N contiguous chunks of FILE's selected tests.",
+    )
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_collection_modifyitems(config, items) -> None:
+    """Split one test file into contiguous chunks for the CI shards.
+
+    Runs after marker deselection, so the chunks partition exactly the selected
+    tests of FILE: every test lands in one chunk, and a new test lands in one
+    without anyone listing it. Tests of other files are left alone.
+    """
+
+    spec = config.getoption("--node-chunk")
+    if not spec:
+        return
+    target, _, part = spec.rpartition(":")
+    index, count = (int(value) for value in part.split("/"))
+    if not 1 <= index <= count:
+        raise pytest.UsageError(f"--node-chunk {spec}: need 1 <= I <= N")
+    owned = [item for item in items if item.nodeid.split("::")[0] == target]
+    base, extra = divmod(len(owned), count)
+    start = (index - 1) * base + min(index - 1, extra)
+    stop = start + base + (1 if index <= extra else 0)
+    dropped = {id(item) for item in owned[:start] + owned[stop:]}
+    if dropped:
+        config.hook.pytest_deselected(
+            items=[item for item in items if id(item) in dropped]
+        )
+        items[:] = [item for item in items if id(item) not in dropped]
 
 
 def pytest_report_header(config) -> str:
