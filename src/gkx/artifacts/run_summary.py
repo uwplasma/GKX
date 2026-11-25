@@ -571,6 +571,13 @@ def _resolution_lines(
     nx = grid.get("Nx", root.get("nx"))
     ny = grid.get("Ny", root.get("ny"))
     nz = grid.get("Nz", root.get("ntheta"))
+    model = _table(deck, "geometry").get("model")
+    if grid.get("ntheta") is not None and model != "imported-netcdf":  # Nz is unused
+        # VMEC-family lines hold ntheta points in all; analytic ones ntheta per 2 pi.
+        zp = 1 if model in ("vmec", "desc", "gvec") else (
+            grid.get("zp") or 2 * grid.get("nperiod", 1) - 1
+        )
+        nz = grid["ntheta"] * zp
     nl = run.get("Nl", root.get("nlaguerre"))
     nm = run.get("Nm", root.get("nhermite"))
     lines: list[tuple[str, str]] = []
