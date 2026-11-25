@@ -3709,6 +3709,42 @@ def test_runtime_imex_chunks_share_one_scan_and_end_on_a_short_final_chunk() -> 
     assert np.isfinite(short.state).all()
 
 
+@pytest.mark.parametrize("floor", [0.03, 0.0])
+def test_refused_imex_retries_smaller_then_falls_back_and_says_so(
+    monkeypatch, floor
+) -> None:
+    # A factor refused at the deck's first step (float32, large dt) is retried at
+    # dt/4, dt/16 and only then replaced by rk4-pi, with a warning and the stepper
+    # that ran in the summary. 0.1 -> 0.025 passes the floor; 0.0 refuses all.
+    from gkx.workflows import nonlinear as workflow
+
+    cfg, _ = load_runtime_from_toml(
+        REPO_ROOT / "examples/05_kinetic_electrons/case.toml"
+    )
+    cfg = uniform_moments(cfg)
+    cfg = replace(cfg, grid=replace(cfg.grid, Nx=4, Ny=4, Nz=8))
+    time = replace(cfg.time, t_max=0.1, dt_max=0.1, damp_ends_rate=0.1, run_to="t_max")
+    original, seen = workflow._run_diagnostics, []
+
+    def refuse(cfg, ctx, policy, **kw):
+        seen.append((kw["method"], ctx.dt))
+        if kw["method"] == "imex-ark3" and ctx.dt > floor:
+            raise ValueError("structured implicit factor residual 1e+00 > 5e-02")
+        return original(cfg, ctx, policy, **kw)
+
+    monkeypatch.setattr(workflow, "_run_diagnostics", refuse)
+    request = replace(cfg, time=replace(time, method="imex-ark3"))
+    if floor:
+        result = run_runtime_nonlinear(request, Nl=2, Nm=4)
+    else:
+        with pytest.warns(RuntimeWarning, match="using rk4-pi"):
+            result = run_runtime_nonlinear(request, Nl=2, Nm=4)
+    steppers = [m for m, _ in seen]
+    assert steppers[0] == "imex-ark3"
+    assert result.summary()["integrator"] == ("imex-ark3" if floor else "rk4-pi")
+    assert steppers.count("imex-ark3") == (2 if floor else 3)
+
+
 def _collision_interval_cfg() -> RuntimeConfig:
     base = _nonlinear_ion_cfg()
     return replace(
