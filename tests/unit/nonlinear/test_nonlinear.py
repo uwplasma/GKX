@@ -4640,3 +4640,33 @@ def test_chunk_runaway_ignores_small_seeds_and_zero_start():
     assert _chunk_runaway(np.asarray([1.0, 1e5]))
     assert _chunk_runaway(np.asarray([1.0, np.nan]))
     assert _chunk_runaway(np.asarray([0.0, np.inf]))
+
+
+def _tutorial_fixed_rk4(dt: float, t_max: float):
+    import gkx
+
+    deck = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    time_cfg = replace(
+        deck.time, method="rk4", fixed_dt=True, dt=dt, t_max=t_max, sample_stride=1
+    )
+    case = deck.replace(time=replace(time_cfg, diagnostics_stride=1))
+    return gkx.solve(case, ky_target=case.run.ky).diagnostics
+
+
+@pytest.mark.skipif(not jax.config.jax_enable_x64, reason="float32 overflows first")
+def test_fixed_step_growth_guard_on_the_tutorial_deck():
+    """An unstable fixed step raises before Wg overflows; the default step does not.
+
+    The rk4 stability edge of the tutorial deck is between dt = 0.21 (Wg follows
+    the ITG growth to t = 10) and 0.22, measured by bisection like the expm edge
+    of the numerics report (e1). At 1.5 times the edge, dt = 0.32, Wg grows by
+    e^3.7 per step and reaches 1.5e42 at t = 4.8 while staying finite in float64.
+    """
+
+    with pytest.warns(RuntimeWarning, match="explicit CFL bound"):
+        with pytest.raises(
+            RuntimeError, match=r"Wg grew by a factor .* sample 5 at t=1\.92"
+        ):
+            _tutorial_fixed_rk4(0.32, 4.8)
+    wg = np.asarray(_tutorial_fixed_rk4(0.1, 10.0).Wg_t)
+    assert np.isfinite(wg).all() and wg[-1] < 1e-4
