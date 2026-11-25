@@ -68,7 +68,7 @@ electron deck notes, for long kinetic-electron runs at 32x32 and above.
 The embedded solution is the explicit midpoint rule built from the RK4 stages,
 so the error estimate costs no extra right-hand side.  The step follows an I
 controller on :math:`\|e\|/(10^{-2}\|G\|)` (safety 0.9, growth <= 1.3), is
-capped at twice the CFL step and at ``dt_max``, and a step with an estimate
+capped at twice the CFL step and at ``dt_max`` (no cap when unset), and a step with an estimate
 above three tolerances is redone once at the controller's smaller step.
 Adiabatic-electron Cyclone at 64x64x24 (4, 8), one RTX A4000, saturated window
 of ``t`` = 500: 0.34 s per unit time against 0.61 for ``rk4`` + CFL (1.8x), mean

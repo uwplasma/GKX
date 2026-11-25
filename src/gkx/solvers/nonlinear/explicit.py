@@ -521,16 +521,31 @@ def _apply_explicit_collision_split(
     damping: Any | None,
     collision_scheme: str,
     apply_collision_split_fn: CollisionSplitFn | None,
+    interval: int = 1,
+    idx: Any = 0,
 ) -> jnp.ndarray:
-    """Apply the optional post-step collision split used by diagnostics."""
+    """Apply the optional post-step collision split used by diagnostics.
 
-    if not use_collision_split or damping is None:
+    With ``interval`` N > 1 the split runs on every Nth step with N times the
+    step, so the operator is evaluated N times less often.
+    """
+
+    if not use_collision_split:
         return G_new
     if apply_collision_split_fn is None:
         raise ValueError(
             "apply_collision_split_fn is required when collision split is active"
         )
-    return apply_collision_split_fn(G_new, damping, dt_local, collision_scheme)
+    if interval <= 1:
+        return apply_collision_split_fn(G_new, damping, dt_local, collision_scheme)
+    return jax.lax.cond(
+        (idx + 1) % interval == 0,
+        lambda G: apply_collision_split_fn(
+            G, damping, interval * dt_local, collision_scheme
+        ),
+        lambda G: G,
+        G_new,
+    )
 
 
 def _advance_explicit_diagnostic_state(
@@ -553,6 +568,9 @@ def _advance_explicit_diagnostic_state(
     collision_scheme: str,
     apply_collision_split_fn: CollisionSplitFn | None,
     max_dt: jnp.ndarray | None = None,
+    collision_interval: int = 1,
+    collision_dt_cap: float | None = None,
+    idx: Any = 0,
 ) -> tuple[jnp.ndarray, Any, jnp.ndarray, jnp.ndarray]:
     """Advance one explicit diagnostic state and compute its new fields."""
 
@@ -570,6 +588,8 @@ def _advance_explicit_diagnostic_state(
         )
     if max_dt is not None:
         dt_local = jnp.minimum(dt_local, jnp.maximum(max_dt, 0.0))
+    if collision_dt_cap is not None:  # forward-Euler stability of the split update
+        dt_local = jnp.minimum(dt_local, collision_dt_cap)
     dt_next = dt_local
     if scales is not None:
         G_new, dt_local, dt_next = advance_rk4_pi_state(
@@ -598,6 +618,8 @@ def _advance_explicit_diagnostic_state(
         damping=damping,
         collision_scheme=collision_scheme,
         apply_collision_split_fn=apply_collision_split_fn,
+        interval=collision_interval,
+        idx=idx,
     )
     G_new = jnp.asarray(project_state(G_new), dtype=state_dtype)
     fields_new = compute_fields_fn(
@@ -660,6 +682,8 @@ def make_explicit_diagnostic_step(
     collision_scheme: str = "implicit",
     apply_collision_split_fn: CollisionSplitFn | None = None,
     time_horizon: float | None = None,
+    collision_interval: int = 1,
+    collision_dt_cap: float | None = None,
 ) -> DiagnosticStepFn:
     """Build one explicit diagnostic scan step with injected runtime seams."""
 
@@ -689,6 +713,9 @@ def make_explicit_diagnostic_step(
                 collision_scheme=collision_scheme,
                 apply_collision_split_fn=apply_collision_split_fn,
                 max_dt=max_dt,
+                collision_interval=collision_interval,
+                collision_dt_cap=collision_dt_cap,
+                idx=idx,
             )
             diag = _select_explicit_diagnostic(
                 idx,
