@@ -395,8 +395,8 @@ Resolution
   asks for, with the reason.
 - Parallel. Analytic geometry: ``ntheta`` = 24-64 per :math:`2\pi` segment, and
   ``nperiod >= 2`` for any linear run with linked boundaries. VMEC: ``ntheta``
-  is the total along the line, so use at least max(48, 16 per field period
-  crossed in one turn) points per poloidal turn, so ``ntheta >= 48 npol`` or more.
+  is the total along the line, so use at least max(48, 16 nfp / |iota|) points
+  per poloidal turn: ``ntheta >= npol max(48, 16 nfp / |iota|)``.
 - Field-line length. Three turns is a reasonable default for low-shear
   stellarators. Use ``npol >= 3`` for VMEC and ``nperiod >= 2`` for
   analytic geometry. Shorter lines give a wrong growth rate at every end-damping

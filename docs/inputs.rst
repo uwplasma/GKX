@@ -326,10 +326,10 @@ For VMEC, ``grid.ntheta`` is the total number of points along the line over
 ``[-npol pi, npol pi]``, as in GX (``ntheta`` with ``npol``), stella (``nzed``) and
 GENE (``nz0`` with ``n_pol``); it is not a count per turn. The points per turn
 are ``ntheta / npol``. Analytic geometry counts ``ntheta`` per ``2 pi`` segment
-instead, so ``Nz = ntheta (2 nperiod - 1)``. Resolve at least 16 points per
-field period crossed in one poloidal turn and at least 48 per turn, that is
-``ntheta >= 48 npol``; growth rates on four- and five-period stellarators did
-not converge below that.
+instead, so ``Nz = ntheta (2 nperiod - 1)``. Resolve at least 48 points per
+turn and 16 per field period crossed in one turn (``nfp / |iota|`` periods), that is
+``ntheta >= npol max(48, 16 nfp / |iota|)``; growth rates on four- and five-period
+stellarators did not converge below that.
 When ``geometry_file`` is set for ``model = "vmec"``, GKX regenerates
 that target instead of reusing a stale file from an older VMEC conversion.
 For VMEC ``fix aspect`` runs, GKX follows the helper default contract and
